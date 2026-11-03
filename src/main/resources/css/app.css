@@ -1,0 +1,312 @@
+/* =====================================================================
+   POS 2.0 - Tema visual "C": menú lateral oscuro + zona de trabajo clara.
+   Todo el diseño vive aquí: para cambiar colores o tamaños, se edita este archivo.
+   El color de acento se define UNA vez (-ac) y se reutiliza en todo el sistema.
+   ===================================================================== */
+
+.root {
+    -ac: #2563eb;            /* color de acento (azul) */
+    -ac-oscuro: #1d4ed8;     /* acento al pasar el mouse */
+    -ac-suave: #e8efff;      /* fondo suave del acento */
+    -texto: #111827;
+    -texto-suave: #6b7280;
+    -borde: #e5e7eb;
+    -fondo: #f5f6f8;
+    -menu: #0f172a;
+
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: -texto;
+}
+
+.app-bg { -fx-background-color: -fondo; }
+
+/* ---------- Iconos (formas SVG pintadas con background-color) ---------- */
+.icono { -fx-background-color: #64748b; }
+
+/* ---------- Menú lateral ---------- */
+.sidebar { -fx-background-color: -menu; -fx-padding: 18 12 14 12; }
+.marca { -fx-text-fill: white; -fx-font-size: 19px; -fx-font-weight: bold; }
+.marca-sub { -fx-text-fill: #94a3b8; -fx-font-size: 11px; }
+
+.nav-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #94a3b8;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 10 12;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+    -fx-graphic-text-gap: 11;
+    -fx-font-size: 13px;
+}
+.nav-btn .icono { -fx-background-color: #94a3b8; }
+.nav-btn:hover { -fx-background-color: #1e293b; -fx-text-fill: white; }
+.nav-btn:hover .icono { -fx-background-color: white; }
+.nav-btn.activo { -fx-background-color: #1e293b; -fx-text-fill: white; -fx-font-weight: bold; }
+.nav-btn.activo .icono { -fx-background-color: #60a5fa; }
+
+.usuario-caja { -fx-background-color: #1e293b; -fx-background-radius: 10; -fx-padding: 10 12; }
+.usuario-nombre { -fx-text-fill: white; -fx-font-weight: bold; }
+.usuario-rol { -fx-text-fill: #94a3b8; -fx-font-size: 11px; }
+.salir-btn { -fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 6; -fx-background-radius: 6; }
+.salir-btn:hover { -fx-background-color: #334155; }
+.salir-btn .icono { -fx-background-color: #94a3b8; }
+
+/* ---------- Barra superior ---------- */
+.topbar {
+    -fx-background-color: white;
+    -fx-border-color: -borde;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 14 24;
+}
+.titulo-pagina { -fx-font-size: 20px; -fx-font-weight: bold; }
+.fecha { -fx-text-fill: -texto-suave; }
+
+.chip { -fx-padding: 4 12; -fx-background-radius: 20; -fx-font-size: 12px; -fx-font-weight: bold; }
+.chip-ok { -fx-background-color: #dcfce7; -fx-text-fill: #166534; }
+.chip-off { -fx-background-color: #fee2e2; -fx-text-fill: #991b1b; }
+
+/* ---------- Tarjetas ---------- */
+.card {
+    -fx-background-color: white;
+    -fx-background-radius: 12;
+    -fx-border-color: -borde;
+    -fx-border-radius: 12;
+    -fx-padding: 16;
+}
+.card-titulo { -fx-font-size: 14px; -fx-font-weight: bold; }
+.metrica-etiqueta { -fx-text-fill: -texto-suave; -fx-font-size: 12px; }
+.metrica-valor { -fx-font-size: 26px; -fx-font-weight: bold; }
+.metrica-nota { -fx-text-fill: -texto-suave; -fx-font-size: 12px; }
+.texto-suave { -fx-text-fill: -texto-suave; }
+.texto-pequeno { -fx-font-size: 12px; }
+.texto-peligro { -fx-text-fill: #dc2626; }
+.texto-aviso { -fx-text-fill: #b45309; }   /* ámbar: "sobra" plata, no es grave pero hay que revisar */
+.texto-ok { -fx-text-fill: #16a34a; }
+.separador { -fx-background-color: -borde; -fx-min-height: 1; -fx-max-height: 1; }
+
+/* ---------- Botones ---------- */
+.btn-primario, .btn-secundario, .btn-peligro {
+    -fx-background-radius: 8;
+    -fx-padding: 9 18;
+    -fx-cursor: hand;
+    -fx-font-weight: bold;
+}
+.btn-primario { -fx-background-color: -ac; -fx-text-fill: white; }
+.btn-primario:hover { -fx-background-color: -ac-oscuro; }
+.btn-secundario { -fx-background-color: white; -fx-text-fill: -texto; -fx-border-color: #d1d5db; -fx-border-radius: 8; }
+.btn-secundario:hover { -fx-background-color: #f3f4f6; }
+.btn-peligro { -fx-background-color: white; -fx-text-fill: #dc2626; -fx-border-color: #fecaca; -fx-border-radius: 8; }
+.btn-peligro:hover { -fx-background-color: #fef2f2; }
+.btn-grande { -fx-font-size: 16px; -fx-padding: 14 18; }
+.btn-mini {
+    -fx-background-color: #f3f4f6; -fx-background-radius: 6; -fx-cursor: hand;
+    -fx-min-width: 26; -fx-min-height: 26; -fx-max-width: 26; -fx-max-height: 26; -fx-padding: 0;
+    -fx-font-weight: bold;
+}
+.btn-mini:hover { -fx-background-color: #e5e7eb; }
+.btn-primario:disabled, .btn-secundario:disabled { -fx-opacity: 0.5; }
+
+/* ---------- Campos de texto ---------- */
+.text-field, .password-field, .combo-box-base {
+    -fx-background-color: white;
+    -fx-background-radius: 8;
+    -fx-border-color: #d1d5db;
+    -fx-border-radius: 8;
+    -fx-padding: 8 10;
+}
+.text-field:focused, .password-field:focused, .combo-box-base:focused {
+    -fx-border-color: -ac;
+    -fx-effect: dropshadow(gaussian, rgba(37,99,235,0.25), 6, 0, 0, 0);
+}
+.combo-box-base { -fx-padding: 2 4; }
+.combo-box-base .list-cell { -fx-background-color: transparent; -fx-text-fill: -texto; -fx-padding: 5 6; }
+.combo-box-popup .list-view { -fx-background-color: white; -fx-border-color: #d1d5db; -fx-background-radius: 8; -fx-border-radius: 8; }
+.combo-box-popup .list-cell:hover, .combo-box-popup .list-cell:filled:selected { -fx-background-color: -ac-suave; -fx-text-fill: -texto; }
+.campo-buscar { -fx-padding: 10 12; -fx-font-size: 14px; }
+.etiqueta-campo { -fx-text-fill: -texto-suave; -fx-font-size: 12px; }
+
+/* ---------- Tarjetas de producto (pantalla de ventas) ---------- */
+.tile {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: -borde;
+    -fx-border-radius: 10;
+    -fx-padding: 12;
+    -fx-cursor: hand;
+}
+.tile:hover { -fx-border-color: -ac; -fx-effect: dropshadow(gaussian, rgba(37,99,235,0.18), 8, 0, 0, 1); }
+.tile-icono { -fx-background-color: -fondo; -fx-background-radius: 8; -fx-min-height: 44; -fx-pref-height: 44; }
+.tile-icono .icono { -fx-background-color: #94a3b8; }
+.tile-nombre { -fx-font-size: 13px; -fx-text-fill: -texto; }
+.tile-precio { -fx-font-weight: bold; -fx-text-fill: -ac; -fx-font-size: 14px; }
+.tile-stock { -fx-text-fill: -texto-suave; -fx-font-size: 11px; }
+.tile-stock.texto-peligro { -fx-text-fill: #dc2626; -fx-font-weight: bold; }
+.tile-agotado { -fx-opacity: 0.55; -fx-cursor: default; }
+.tile-agotado:hover { -fx-border-color: -borde; -fx-effect: null; }
+
+/* ---------- Chips de categoría (Ventas) ---------- */
+.toggle-button.chip-cat {
+    -fx-background-insets: 0; -fx-background-radius: 20; -fx-padding: 5 14;
+    -fx-font-size: 12px; -fx-font-weight: bold; -fx-cursor: hand;
+}
+.toggle-button.chip-cat:focused { -fx-background-insets: 0; }
+
+/* ---------- Atajos de teclado (se muestran como teclas) ---------- */
+.tecla {
+    -fx-background-color: #f3f4f6; -fx-border-color: #d1d5db; -fx-background-radius: 5; -fx-border-radius: 5;
+    -fx-padding: 1 6; -fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #4b5563;
+}
+.atajo-texto { -fx-text-fill: -texto-suave; -fx-font-size: 12px; }
+.btn-primario .tecla, .btn-secundario .tecla { -fx-background-color: rgba(255,255,255,0.2); -fx-border-color: rgba(255,255,255,0.35); }
+
+/* Menú lateral: ahora lleva un número (Ctrl + número) a la derecha de cada módulo */
+.nav-btn .label { -fx-text-fill: #94a3b8; }
+.nav-btn:hover .label, .nav-btn.activo .label { -fx-text-fill: white; }
+.nav-btn.activo .label { -fx-font-weight: bold; }
+.nav-btn .nav-tecla { -fx-text-fill: #64748b; -fx-font-size: 10px; -fx-font-weight: bold; -fx-border-color: #334155; -fx-border-radius: 4; -fx-padding: 0 5; }
+.nav-btn:hover .nav-tecla, .nav-btn.activo .nav-tecla { -fx-text-fill: #cbd5e1; -fx-border-color: #475569; }
+.menu-ayuda { -fx-text-fill: #64748b; -fx-font-size: 11px; }
+
+/* ---------- Pantalla de cobro ---------- */
+.cobro-titulo { -fx-font-size: 30px; -fx-font-weight: bold; }
+.text-field.campo-monto { -fx-font-size: 26px; -fx-font-weight: bold; -fx-padding: 10 14; }
+.btn-rapido {
+    -fx-background-color: white; -fx-border-color: #e5e7eb; -fx-border-radius: 8; -fx-background-radius: 8;
+    -fx-padding: 7 14; -fx-cursor: hand; -fx-font-weight: bold;
+}
+.btn-rapido:hover { -fx-background-color: #f3f4f6; }
+.total-oscuro { -fx-background-color: #111827; -fx-background-radius: 14; -fx-padding: 16 24 18 24; }
+.total-oscuro-etiqueta { -fx-text-fill: #9ca3af; -fx-font-size: 12px; -fx-font-weight: bold; }
+.total-oscuro-valor { -fx-text-fill: white; -fx-font-size: 44px; -fx-font-weight: bold; }
+.cobro-fila-etiqueta { -fx-text-fill: -texto-suave; -fx-font-size: 18px; }
+.cobro-fila-valor { -fx-font-size: 20px; -fx-font-weight: bold; }
+.cobro-estado-titulo { -fx-font-size: 20px; -fx-font-weight: bold; }
+.cobro-estado-valor { -fx-font-size: 34px; -fx-font-weight: bold; }
+
+/* ---------- Aviso después de cobrar (en Ventas) ---------- */
+.aviso-ok { -fx-background-color: #dcfce7; -fx-background-radius: 12; -fx-border-color: #bbf7d0; -fx-border-radius: 12; -fx-padding: 12 16; }
+.aviso-titulo { -fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #166534; }
+.aviso-detalle { -fx-text-fill: #166534; -fx-font-size: 12px; }
+.aviso-etiqueta { -fx-text-fill: #166534; -fx-font-size: 12px; -fx-font-weight: bold; }
+.aviso-devolucion-valor { -fx-text-fill: #166534; -fx-font-size: 30px; -fx-font-weight: bold; }
+
+/* ---------- Carrito ---------- */
+.linea-nombre { -fx-font-weight: bold; }
+.linea { -fx-padding: 9 0; -fx-border-color: #f1f5f9; -fx-border-width: 0 0 1 0; }
+.total-valor { -fx-font-size: 32px; -fx-font-weight: bold; }
+.toggle-button.metodo {
+    -fx-background-color: white; -fx-border-color: #d1d5db; -fx-border-radius: 8; -fx-background-radius: 8;
+    -fx-padding: 8 4; -fx-cursor: hand; -fx-font-size: 12px;
+}
+.toggle-button.metodo:selected { -fx-background-color: -ac-suave; -fx-border-color: -ac; -fx-text-fill: -ac-oscuro; -fx-font-weight: bold; }
+
+/* ---------- Tablas ---------- */
+.table-view {
+    -fx-background-color: white; -fx-background-radius: 12;
+    -fx-border-color: -borde; -fx-border-radius: 12; -fx-padding: 0;
+}
+.table-view .column-header-background { -fx-background-color: #f9fafb; -fx-background-radius: 12 12 0 0; }
+.table-view .column-header, .table-view .filler {
+    -fx-background-color: transparent; -fx-size: 40;
+    -fx-border-color: transparent transparent -borde transparent;
+}
+.table-view .column-header .label { -fx-text-fill: -texto-suave; -fx-font-weight: bold; -fx-font-size: 12px; -fx-alignment: CENTER_LEFT; }
+.table-row-cell { -fx-background-color: white; -fx-border-color: transparent transparent #f1f5f9 transparent; -fx-cell-size: 42; }
+.table-row-cell:selected { -fx-background-color: -ac-suave; }
+.table-row-cell:selected .table-cell { -fx-text-fill: -texto; }
+.table-cell { -fx-alignment: CENTER_LEFT; -fx-padding: 0 12; -fx-text-fill: -texto; -fx-border-color: transparent; }
+.table-cell.texto-suave { -fx-text-fill: -texto-suave; }
+.table-cell.texto-ok { -fx-text-fill: #16a34a; -fx-font-weight: bold; }
+.table-cell.texto-aviso { -fx-text-fill: #b45309; -fx-font-weight: bold; }
+.table-cell.texto-peligro { -fx-text-fill: #dc2626; -fx-font-weight: bold; }
+.table-row-cell:empty { -fx-background-color: white; -fx-border-color: transparent; }
+.table-view .placeholder .label { -fx-text-fill: -texto-suave; }
+
+/* ---------- Lista de categorías (diseño E) ---------- */
+.titulo-detalle { -fx-font-size: 18px; -fx-font-weight: bold; }
+.pill { -fx-padding: 1 9; -fx-background-radius: 20; -fx-font-size: 12px; -fx-font-weight: bold; }
+.pill-azul { -fx-background-color: -ac-suave; -fx-text-fill: -ac-oscuro; }
+.pill-gris { -fx-background-color: #f3f4f6; -fx-text-fill: -texto-suave; }
+.lista-categorias { -fx-background-color: transparent; -fx-background-insets: 0; -fx-padding: 0; }
+.lista-categorias .list-cell { -fx-background-color: transparent; -fx-padding: 9 10; -fx-background-radius: 8; -fx-cursor: hand; }
+.lista-categorias .list-cell:filled:hover { -fx-background-color: #f3f4f6; }
+.lista-categorias .list-cell:filled:selected { -fx-background-color: -ac-suave; }
+.lista-categorias .list-cell:filled:selected .label { -fx-font-weight: bold; }
+.lista-categorias .placeholder .label { -fx-text-fill: -texto-suave; }
+
+/* ---------- Ficha de proveedor ---------- */
+.mini { -fx-background-color: -fondo; -fx-background-radius: 8; -fx-padding: 10 12; }
+.mini-valor { -fx-font-size: 15px; -fx-font-weight: bold; }
+.lista-categorias .list-cell:filled:selected .texto-pequeno { -fx-font-weight: normal; }
+
+/* ---------- Interruptor (permisos) ---------- */
+.interruptor { -fx-background-color: #d1d5db; -fx-background-radius: 11; -fx-cursor: hand; }
+.interruptor.on { -fx-background-color: -ac; }
+.interruptor:disabled { -fx-opacity: 0.45; -fx-cursor: default; }
+.interruptor:focused { -fx-border-color: #93c5fd; -fx-border-width: 2; -fx-border-radius: 11; }
+
+/* ---------- Pestañas (TabPane) ---------- */
+.tab-pane { -fx-tab-min-height: 38; }
+.tab-pane > .tab-header-area { -fx-padding: 0; }
+.tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: transparent; }
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: transparent; -fx-background-insets: 0; -fx-background-radius: 0;
+    -fx-padding: 0 18; -fx-cursor: hand;
+    -fx-border-color: transparent transparent #e5e7eb transparent; -fx-border-width: 0 0 2 0;
+}
+.tab-pane > .tab-header-area > .headers-region > .tab:selected { -fx-border-color: transparent transparent -ac transparent; }
+.tab-pane > .tab-header-area > .headers-region > .tab .tab-label { -fx-text-fill: -texto-suave; -fx-font-size: 14px; -fx-font-weight: bold; }
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label { -fx-text-fill: -ac-oscuro; }
+.tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label { -fx-text-fill: -texto; }
+.tab-pane > .tab-header-area > .headers-region > .tab:selected:hover .tab-label { -fx-text-fill: -ac-oscuro; }
+.tab-pane .tab-header-area .tab .focus-indicator { -fx-border-color: transparent; }
+.tab-pane > .tab-content-area { -fx-padding: 16 0 0 0; -fx-background-color: transparent; }
+.btn-primario .icono { -fx-background-color: white; }
+
+/* ---------- Scroll ---------- */
+.scroll-pane { -fx-background-color: transparent; -fx-padding: 0; }
+.scroll-pane > .viewport { -fx-background-color: transparent; }
+.scroll-bar:vertical, .scroll-bar:horizontal { -fx-background-color: transparent; }
+.scroll-bar .thumb { -fx-background-color: #cbd5e1; -fx-background-radius: 6; }
+.scroll-bar .increment-button, .scroll-bar .decrement-button { -fx-padding: 0; -fx-pref-height: 0; -fx-pref-width: 0; }
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow { -fx-padding: 0; -fx-shape: " "; }
+
+/* ---------- Gráficas ---------- */
+.chart-plot-background { -fx-background-color: transparent; }
+.chart-vertical-grid-lines { -fx-stroke: transparent; }
+.chart-horizontal-grid-lines { -fx-stroke: #f1f5f9; }
+.chart-bar { -fx-bar-fill: -ac; -fx-background-radius: 4 4 0 0; }
+.axis { -fx-tick-label-fill: -texto-suave; }
+.axis-tick-mark, .axis-minor-tick-mark { -fx-stroke: transparent; }
+.chart .axis-label { -fx-text-fill: -texto-suave; }
+
+/* ---------- Pantalla de login (diseño B) ---------- */
+.login { -fx-background-color: white; }
+.login-izq { -fx-background-color: -fondo; -fx-padding: 0 0 0 90; }
+.login-der { -fx-background-color: white; -fx-border-color: -ac transparent transparent transparent; -fx-border-width: 4 0 0 0; }
+.login-marca-titulo { -fx-font-size: 30px; -fx-font-weight: bold; }
+.login-marca-sub { -fx-text-fill: -texto-suave; -fx-font-size: 14px; }
+.login-ventaja { -fx-text-fill: #4b5563; -fx-font-size: 14px; }
+.login-ventaja .icono { -fx-background-color: -ac; }
+.login-titulo { -fx-font-size: 24px; -fx-font-weight: bold; }
+.error-texto { -fx-text-fill: #dc2626; -fx-font-size: 12px; }
+.logo-cuadro { -fx-background-color: -ac; -fx-background-radius: 14; }
+.logo-letra { -fx-text-fill: white; -fx-font-size: 24px; -fx-font-weight: bold; }
+.text-field.con-ojo, .password-field.con-ojo { -fx-padding: 9 42 9 12; }
+.ojo-btn { -fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 6; -fx-background-radius: 6; }
+.ojo-btn:hover { -fx-background-color: #f3f4f6; }
+.ojo-btn .icono { -fx-background-color: #6b7280; }
+.enlace { -fx-background-color: transparent; -fx-text-fill: -ac; -fx-cursor: hand; -fx-padding: 0; -fx-font-size: 12px; }
+.enlace:hover { -fx-underline: true; }
+.check-box { -fx-font-size: 12px; -fx-text-fill: -texto-suave; }
+
+/* ---------- Ventanas de diálogo ---------- */
+.dialog-pane { -fx-background-color: white; }
+.dialog-pane > .header-panel { -fx-background-color: white; }
+.dialog-pane > .header-panel .label { -fx-font-size: 16px; -fx-font-weight: bold; }
+.dialog-pane > .button-bar > .container { -fx-background-color: white; }
+.dialog-pane .button { -fx-background-radius: 8; -fx-padding: 8 18; -fx-cursor: hand; -fx-background-color: white; -fx-border-color: #d1d5db; -fx-border-radius: 8; }
+.dialog-pane .button:default { -fx-background-color: -ac; -fx-text-fill: white; -fx-font-weight: bold; -fx-border-color: -ac; }
+.recibo { -fx-font-family: "Consolas"; -fx-font-size: 12px; }
+.recibo .content { -fx-background-color: #fffef5; }
