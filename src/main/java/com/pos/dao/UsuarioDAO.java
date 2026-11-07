@@ -32,6 +32,7 @@ public class UsuarioDAO {
                     u.setIdRol(rs.getInt("id_rol"));
                     u.setRol(rs.getString("rol"));
                     u.setActivo(rs.getBoolean("activo"));
+                    extras(u, rs);
                     return u;
                 }
             }
@@ -56,23 +57,67 @@ public class UsuarioDAO {
                 u.setIdRol(rs.getInt("id_rol"));
                 u.setRol(rs.getString("rol"));
                 u.setActivo(rs.getBoolean("activo"));
+                extras(u, rs);
                 lista.add(u);
             }
         }
         return lista;
     }
 
-    // Cambia el nombre y el rol de un usuario.
+    // Cambia nombre, rol, cupo, pago por día, permisos propios y pantallas extra de un usuario.
     public void actualizar(Usuario u) throws SQLException {
-        String sql = "UPDATE usuarios SET nombre = ?, id_rol = ? WHERE id = ?";
+        String sql = "UPDATE usuarios SET nombre = ?, id_rol = ?, cupo = ?, pago_dia = ?, puede_anular = ?, "
+                + "puede_editar_productos = ?, descuento_max = ? WHERE id = ?";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, u.getNombre());
             ps.setInt(2, u.getIdRol());
-            ps.setInt(3, u.getId());
+            ps.setBigDecimal(3, u.getCupo());
+            ps.setBigDecimal(4, u.getPagoDia());
+            ps.setBoolean(5, u.isPuedeAnular());
+            ps.setBoolean(6, u.isPuedeEditarProductos());
+            ps.setInt(7, u.getDescuentoMax());
+            ps.setInt(8, u.getId());
             ps.executeUpdate();
         }
+        try (Connection con = Conexion.obtener()) {   // las pantallas extra se guardan de nuevo completas
+            try (PreparedStatement ps = con.prepareStatement("DELETE FROM usuario_modulos WHERE id_usuario = ?")) {
+                ps.setInt(1, u.getId());
+                ps.executeUpdate();
+            }
+            for (com.pos.modelo.Modulo m : u.getModulosExtra()) {
+                try (PreparedStatement ps = con.prepareStatement("INSERT INTO usuario_modulos (id_usuario, modulo) VALUES (?, ?)")) {
+                    ps.setInt(1, u.getId());
+                    ps.setString(2, m.name());
+                    ps.executeUpdate();
+                }
+            }
+        }
+    }
+
+    // Lee lo que se agregó después: cupo, pago por día, permisos propios y pantallas extra.
+    private void extras(Usuario u, ResultSet rs) throws SQLException {
+        u.setCupo(rs.getBigDecimal("cupo"));
+        u.setPagoDia(rs.getBigDecimal("pago_dia"));
+        u.setPuedeAnular(rs.getBoolean("puede_anular"));
+        u.setDescuentoMax(rs.getInt("descuento_max"));
+        u.setPuedeEditarProductos(rs.getBoolean("puede_editar_productos"));
+        java.util.Set<com.pos.modelo.Modulo> extra = java.util.EnumSet.noneOf(com.pos.modelo.Modulo.class);
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = con.prepareStatement("SELECT modulo FROM usuario_modulos WHERE id_usuario = ?")) {
+            ps.setInt(1, u.getId());
+            try (ResultSet r2 = ps.executeQuery()) {
+                while (r2.next()) {
+                    try {
+                        extra.add(com.pos.modelo.Modulo.valueOf(r2.getString(1)));
+                    } catch (IllegalArgumentException e) {
+                        // un módulo que ya no existe se ignora
+                    }
+                }
+            }
+        }
+        u.setModulosExtra(extra);
     }
 
     // Guarda una clave nueva (ya cifrada).

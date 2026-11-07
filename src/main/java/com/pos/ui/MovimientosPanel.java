@@ -132,6 +132,9 @@ public class MovimientosPanel extends VBox {
     }
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         if (e.getCode() == javafx.scene.input.KeyCode.F6) {
             Chips.siguiente(filtro);
             e.consume();

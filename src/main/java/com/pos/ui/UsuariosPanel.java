@@ -1,5 +1,6 @@
 package com.pos.ui;
 
+import com.pos.modelo.Accion;
 import com.pos.modelo.Modulo;
 import com.pos.modelo.Rol;
 import com.pos.modelo.Usuario;
@@ -259,6 +260,9 @@ public class UsuariosPanel extends HBox {
     // ---------------------------------------------------------------- acciones
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         switch (e.getCode()) {
             case F2 -> {
                 buscador.requestFocus();
@@ -276,6 +280,9 @@ public class UsuariosPanel extends HBox {
     }
 
     private void nuevoUsuario() {
+        if (!Seguridad.permitido(Modulo.USUARIOS, Accion.CREAR, "crear usuarios")) {
+            return;
+        }
         Usuario creado = UsuarioDialog.abrir(null);
         if (creado != null) {
             buscador.clear();
@@ -284,6 +291,9 @@ public class UsuariosPanel extends HBox {
     }
 
     private void editar() {
+        if (!Seguridad.permitido(Modulo.USUARIOS, Accion.EDITAR, "editar usuarios")) {
+            return;
+        }
         if (actual == null) {
             return;
         }

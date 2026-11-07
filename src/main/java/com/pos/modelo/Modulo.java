@@ -10,6 +10,7 @@ public enum Modulo {
     PRODUCTOS("Productos"),
     CATEGORIAS_PROVEEDORES("Categorías y proveedores"),
     VENTAS("Ventas"),
+    HISTORIAL("Historial y facturas"),
     CAJA("Caja y arqueo"),
     INVENTARIO("Inventario y compras"),
     CLIENTES("Clientes"),

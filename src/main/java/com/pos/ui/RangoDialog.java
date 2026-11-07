@@ -36,7 +36,7 @@ public class RangoDialog {
 
         ButtonType aceptar = new ButtonType("Ver este rango", ButtonBar.ButtonData.OK_DONE);
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText("Elige el rango de fechas");
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

@@ -39,6 +39,7 @@ public class AutenticacionService {
         if (!BCrypt.checkpw(clave, u.getClaveHash())) {
             return null;
         }
+        AuditoriaService.registrar(u, "Inicio de sesión", u.getNombre());
         return u;
     }
 }

@@ -39,7 +39,7 @@ public class LoginView extends HBox {
     public LoginView(Runnable alEntrar) {
         getStyleClass().add("login");
 
-        VBox izquierda = crearPanelMarca();
+        StackPane izquierda = crearPanelMarca();
         VBox derecha = crearPanelFormulario(alEntrar);
         // La izquierda ocupa 42 % del ancho; la derecha, el resto.
         izquierda.prefWidthProperty().bind(widthProperty().multiply(0.42));
@@ -59,21 +59,44 @@ public class LoginView extends HBox {
 
     // ---------------------------------------------------------------- izquierda
 
-    private VBox crearPanelMarca() {
+    private StackPane crearPanelMarca() {
         String negocio = nombreNegocio();
 
-        Label titulo = new Label("POS 2.0");
+        Label titulo = new Label(negocio);
         titulo.getStyleClass().add("login-marca-titulo");
-        Label sub = new Label(negocio);
+        Label sub = new Label(Marca.PRODUCTO.toUpperCase());
         sub.getStyleClass().add("login-marca-sub");
 
-        VBox panel = new VBox(18, Logo.crear(54, negocio), new VBox(2, titulo, sub),
+        String inicial = negocio.isBlank() ? "S" : negocio.trim().substring(0, 1).toUpperCase();
+        Label letra = new Label(inicial);
+        letra.getStyleClass().add("login-logo-letra");
+        StackPane logo = new StackPane(letra);
+        logo.getStyleClass().add("login-logo");
+        logo.setMinSize(56, 56);
+        logo.setPrefSize(56, 56);
+        logo.setMaxSize(56, 56);
+
+        Region raya = new Region();
+        raya.getStyleClass().add("login-raya");
+        raya.setMaxWidth(60);
+        raya.setMinHeight(1);
+        raya.setPrefHeight(1);
+
+        VBox panel = new VBox(10, logo, new VBox(4, titulo, sub), raya,
                 ventaja("Ventas rápidas"), ventaja("Inventario al día"), ventaja("Caja sin errores"));
         panel.setAlignment(Pos.CENTER_LEFT);
         panel.getStyleClass().add("login-izq");
-        // Un poco más de aire entre el nombre y la lista de ventajas.
-        VBox.setMargin(panel.getChildren().get(1), new Insets(0, 0, 10, 0));
-        return panel;
+        VBox.setMargin(panel.getChildren().get(1), new Insets(10, 0, 4, 0));
+        VBox.setMargin(raya, new Insets(8, 0, 8, 0));
+
+        Label empresa = new Label("Desarrollado por " + Marca.EMPRESA + "\nVersión " + Marca.VERSION);
+        empresa.getStyleClass().add("login-empresa");
+        StackPane.setAlignment(empresa, Pos.BOTTOM_LEFT);
+        StackPane.setMargin(empresa, new Insets(0, 0, 22, 90));
+
+        StackPane fondo = new StackPane(panel, empresa);
+        fondo.getStyleClass().add("login-fondo");
+        return fondo;
     }
 
     private HBox ventaja(String texto) {
@@ -101,7 +124,7 @@ public class LoginView extends HBox {
         campoClave.setPromptText("Tu clave");
         campoClaveVisible.setPromptText("Tu clave");
 
-        Button entrar = new Button("Entrar");
+        Button entrar = new Button("ENTRAR");
         entrar.getStyleClass().addAll("btn-primario", "btn-grande");
         entrar.setMaxWidth(Double.MAX_VALUE);
         entrar.setDefaultButton(true);   // se activa con Enter

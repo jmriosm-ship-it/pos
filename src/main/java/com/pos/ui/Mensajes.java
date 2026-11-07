@@ -30,7 +30,7 @@ public class Mensajes {
 
     private static Alert crear(Alert.AlertType tipo, String titulo, String mensaje) {
         Alert a = new Alert(tipo);
-        a.setTitle("POS 2.0");
+        a.setTitle(Marca.PRODUCTO);
         a.setHeaderText(titulo);
         a.setContentText(mensaje);
         a.getDialogPane().getStylesheets().add(CSS);

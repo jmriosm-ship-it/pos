@@ -40,6 +40,7 @@ public class VentasHistorialPanel extends VBox {
     private final PeriodoReporte periodo;
 
     private final TableView<Venta> tabla = new TableView<>();
+    private final javafx.scene.control.TextField buscador = new javafx.scene.control.TextField();
     private final ToggleGroup filtro = new ToggleGroup();
     private final Label contador = new Label();
     private List<Venta> todas = List.of();
@@ -61,8 +62,13 @@ public class VentasHistorialPanel extends VBox {
         contador.getStyleClass().add("texto-suave");
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox barra = new HBox(12, chips, contador, espacio, boton("Ver recibo", "F7", "btn-secundario", this::verRecibo));
-        if (usuario.esAdmin()) {   // solo el administrador anula ventas
+        buscador.setPromptText("Buscar por número, cliente, vendedor o producto (F2) — vacío = ventas del periodo");
+        buscador.setOnAction(e -> recargar());
+        HBox.setHgrow(buscador, Priority.ALWAYS);
+        HBox barra = new HBox(12, chips, contador, espacio, boton("Ver recibo", "F7", "btn-secundario", this::verRecibo),
+                boton("Imprimir", "F6", "btn-secundario", this::imprimir),
+                boton("Devolver", "F8", "btn-secundario", this::devolver));
+        if (usuario.puedeAnularVentas()) {   // solo el administrador anula ventas
             barra.getChildren().add(boton("Anular", "F9", "btn-peligro", this::anular));
         }
         barra.setAlignment(Pos.CENTER_LEFT);
@@ -70,11 +76,11 @@ public class VentasHistorialPanel extends VBox {
         configurarTabla();
         VBox.setVgrow(tabla, Priority.ALWAYS);
         FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F5", "Cambiar filtro"), Atajos.etiqueta("↑ ↓", "Moverse"),
-                Atajos.etiqueta("F7", "Ver recibo"));
-        if (usuario.esAdmin()) {
+                Atajos.etiqueta("F2", "Buscar"), Atajos.etiqueta("F6", "Imprimir"), Atajos.etiqueta("F7", "Ver recibo"), Atajos.etiqueta("F8", "Devolver productos"));
+        if (usuario.puedeAnularVentas()) {
             teclas.getChildren().add(Atajos.etiqueta("F9", "Anular venta"));
         }
-        getChildren().addAll(barra, tabla, teclas);
+        getChildren().addAll(buscador, barra, tabla, teclas);
 
         sceneProperty().addListener((o, antigua, nueva) -> {
             if (antigua != null) {
@@ -106,10 +112,11 @@ public class VentasHistorialPanel extends VBox {
                 (Venta v) -> "ANULADA".equals(v.getEstado()) ? "Anulada" : "Completada");
         Tablas.colorear(estado, v -> "ANULADA".equals(v.getEstado()) ? "texto-suave" : "texto-ok");
 
-        tabla.getColumns().add(Tablas.columna("Venta", 80, (Venta v) -> "#" + v.getId()));
+        tabla.getColumns().add(Tablas.columna("Venta", 80, (Venta v) -> v.getNumero()));
         tabla.getColumns().add(Tablas.columna("Fecha", 150, (Venta v) -> v.getFecha().format(FECHA)));
         tabla.getColumns().add(Tablas.columna("Cliente", 200, (Venta v) -> v.getNombreCliente()));
         tabla.getColumns().add(Tablas.columna("Vendió", 150, (Venta v) -> v.getNombreUsuario()));
+        tabla.getColumns().add(Tablas.columna("Unid.", 60, (Venta v) -> String.valueOf(v.getUnidades())));
         tabla.getColumns().add(Tablas.columna("Total", 110, (Venta v) -> Dinero.formato(v.getTotal())));
         tabla.getColumns().add(Tablas.columna("Pago", 110, (Venta v) -> nombreMetodo(v.getMetodoPago())));
         tabla.getColumns().add(estado);
@@ -128,7 +135,9 @@ public class VentasHistorialPanel extends VBox {
 
     public void recargar() {
         try {
-            todas = ventaService.listar(periodo.desde(), periodo.hasta()).stream()
+            // Con texto: se buscan los recibos (número, cliente, vendedor o producto) de cualquier fecha; sin texto, el periodo.
+            boolean buscando = buscador.getText() != null && !buscador.getText().isBlank();
+            todas = (buscando ? ventaService.buscarRecibos(buscador.getText()) : ventaService.listar(periodo.desde(), periodo.hasta())).stream()
                     .sorted(Comparator.comparingInt(Venta::getId).reversed())
                     .toList();
             filtrar();
@@ -154,9 +163,18 @@ public class VentasHistorialPanel extends VBox {
     // ---------------------------------------------------------------- acciones
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         switch (e.getCode()) {
             case F5 -> Chips.siguiente(filtro);
+            case F2 -> {
+                buscador.requestFocus();
+                buscador.selectAll();
+            }
+            case F6 -> imprimir();
             case F7 -> verRecibo();
+            case F8 -> devolver();
             case F9 -> anular();
             default -> {
                 return;
@@ -173,6 +191,21 @@ public class VentasHistorialPanel extends VBox {
         return v;
     }
 
+
+    // F6: manda el recibo de la venta elegida directo a la impresora.
+    private void imprimir() {
+        Venta v = elegida();
+        if (v == null) {
+            return;
+        }
+        try {
+            new com.pos.servicio.ImpresoraService().imprimir(new ReciboService().generar(ventaService.detalle(v.getId())));
+            Mensajes.info("Recibo enviado", "El recibo " + v.getNumero() + " se mandó a la impresora.");
+        } catch (Exception e) {
+            Mensajes.error("No se pudo imprimir el recibo.\n" + e.getMessage());
+        }
+    }
+
     private void verRecibo() {
         Venta v = elegida();
         if (v == null) {
@@ -180,14 +213,33 @@ public class VentasHistorialPanel extends VBox {
         }
         try {
             Venta completa = ventaService.detalle(v.getId());
-            TicketDialog.mostrar("Recibo de la venta #" + v.getId(), new ReciboService().generar(completa));
+            TicketDialog.mostrar("Recibo de la venta " + v.getNumero(), new ReciboService().generar(completa));
         } catch (SQLException e) {
             Mensajes.error("No se pudo mostrar el recibo.\n" + e.getMessage());
         }
     }
 
+
+    // F8: devolver algunos (o todos) los productos de la venta elegida.
+    private void devolver() {
+        if (!Atajos.visible(this)) {
+            return;
+        }
+        Venta v = elegida();
+        if (v == null) {
+            return;
+        }
+        try {
+            if (DevolucionDialog.abrir(ventaService.detalle(v.getId()))) {
+                recargar();
+            }
+        } catch (SQLException e) {
+            Mensajes.error("No se pudo abrir la venta.\n" + e.getMessage());
+        }
+    }
+
     private void anular() {
-        if (!usuario.esAdmin()) {
+        if (!usuario.puedeAnularVentas()) {
             return;
         }
         Venta v = elegida();

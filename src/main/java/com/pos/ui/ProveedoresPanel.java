@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Modulo;
+import com.pos.modelo.Accion;
 import com.pos.modelo.Compra;
 import com.pos.modelo.Producto;
 import com.pos.modelo.Proveedor;
@@ -280,6 +282,9 @@ public class ProveedoresPanel extends HBox {
     // ---------------------------------------------------------------- acciones
 
     private void nuevoProveedor() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.CREAR, "crear proveedores")) {
+            return;
+        }
         Proveedor creado = ProveedorDialog.abrir(null);
         if (creado != null) {
             buscador.clear();
@@ -288,6 +293,9 @@ public class ProveedoresPanel extends HBox {
     }
 
     private void editar() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.EDITAR, "editar proveedores")) {
+            return;
+        }
         if (actual == null) {
             return;
         }
@@ -298,6 +306,9 @@ public class ProveedoresPanel extends HBox {
     }
 
     private void desactivar() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.BORRAR, "desactivar proveedores")) {
+            return;
+        }
         if (actual == null || !Mensajes.confirmar("Desactivar proveedor",
                 "\"" + actual.getNombre() + "\" dejará de aparecer al hacer compras.\nSu historial se conserva.")) {
             return;

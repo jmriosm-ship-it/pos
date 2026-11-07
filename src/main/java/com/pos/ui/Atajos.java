@@ -28,4 +28,14 @@ public class Atajos {
         fila.setAlignment(Pos.CENTER_LEFT);
         return fila;
     }
+
+    // ¿El nodo se ve? Una pestaña que no está elegida no se ve y no debe reaccionar a las teclas.
+    public static boolean visible(javafx.scene.Node nodo) {
+        for (javafx.scene.Node n = nodo; n != null; n = n.getParent()) {
+            if (!n.isVisible()) {
+                return false;
+            }
+        }
+        return nodo.getScene() != null;
+    }
 }

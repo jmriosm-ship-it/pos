@@ -19,6 +19,8 @@ public record Pago(String metodo, BigDecimal monto) {
             case "TARJETA" -> "Tarjeta";
             case "TRANSFERENCIA" -> "Transferencia";
             case "FIADO" -> "Fiado";
+            case "CREDITO" -> "Crédito en cuotas";
+            case "FINANCIERA" -> "Financiera";
             default -> metodo;
         };
     }

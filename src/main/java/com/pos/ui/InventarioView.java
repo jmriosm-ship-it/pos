@@ -8,9 +8,9 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 
 /**
- * Módulo "Inventario y compras": cuatro pestañas.
- *   Existencias · Nueva compra · Movimientos (historial del inventario) · Compras (historial de compras)
- * Alt + 1...4 cambia de pestaña. Cada pestaña vuelve a leer sus datos al abrirse.
+ * Módulo "Inventario y compras": cinco pestañas.
+ *   Existencias · Nueva compra · Movimientos (historial del inventario) · Compras (historial de compras) · Por reponer
+ * Alt + 1...5 cambia de pestaña. Cada pestaña vuelve a leer sus datos al abrirse.
  */
 public class InventarioView extends TabPane {
 
@@ -18,6 +18,7 @@ public class InventarioView extends TabPane {
     private final CompraPanel compra = new CompraPanel();
     private final MovimientosPanel movimientos = new MovimientosPanel();
     private final ComprasHistorialPanel compras = new ComprasHistorialPanel();
+    private final PorReponerPanel porReponer = new PorReponerPanel(this::irAComprar);
     private final Tab pestanaCompra;
 
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
@@ -32,7 +33,9 @@ public class InventarioView extends TabPane {
         pestanaCompra = pestana("Nueva compra", "Alt+2", compra);
         Tab pMovimientos = pestana("Movimientos", "Alt+3", movimientos);
         Tab pCompras = pestana("Compras", "Alt+4", compras);
-        getTabs().addAll(pExistencias, pestanaCompra, pMovimientos, pCompras);
+        Tab pReponer = pestana("Por reponer", "Alt+5", porReponer);
+        getTabs().addAll(pExistencias, pestanaCompra, pMovimientos, pCompras, pReponer);
+        pReponer.setOnSelectionChanged(e -> { if (pReponer.isSelected()) porReponer.recargar(); });
 
         // Al abrir una pestaña se vuelven a leer sus datos (por si cambiaron en otra).
         pExistencias.setOnSelectionChanged(e -> { if (pExistencias.isSelected()) existencias.recargar(); });
@@ -64,7 +67,7 @@ public class InventarioView extends TabPane {
     // Alt + 1...4 = ir a esa pestaña.
     private void tecla(KeyEvent e) {
         if (!e.isAltDown() || e.getCode().ordinal() < KeyCode.DIGIT1.ordinal()
-                || e.getCode().ordinal() > KeyCode.DIGIT4.ordinal()) {
+                || e.getCode().ordinal() > KeyCode.DIGIT5.ordinal()) {
             return;
         }
         getSelectionModel().select(e.getCode().ordinal() - KeyCode.DIGIT1.ordinal());

@@ -38,7 +38,8 @@ public class CobroView extends VBox {
 
     // Lo que devuelve esta pantalla al confirmar: los pagos aplicados, lo que el cliente entregó
     // en efectivo y el vuelto que hay que devolverle.
-    public record Resultado(List<Pago> pagos, BigDecimal efectivoRecibido, BigDecimal devolucion) {
+    public record Resultado(List<Pago> pagos, BigDecimal efectivoRecibido, BigDecimal devolucion,
+                            com.pos.modelo.PlanCredito plan, String financieraNombre) {
     }
 
     private static final int[] BILLETES = {10000, 20000, 50000, 100000};
@@ -52,6 +53,18 @@ public class CobroView extends VBox {
     private final TextField tarjeta = campoMonto();
     private final TextField fiado = campoMonto();   // lo que queda a deber (solo si hay un cliente elegido)
     private final boolean puedeFiar;
+    private final TextField credito = campoMonto();   // lo que se financia en cuotas (solo con cliente que tenga cédula)
+    private final TextField financiera = campoMonto();   // lo que paga una financiera más tarde
+    private final javafx.scene.control.ComboBox<String> nombreFinanciera = new javafx.scene.control.ComboBox<>();
+    private final Label lblFinanciera = new Label();
+    private final HBox filaFinanciera = new HBox();
+    private final boolean puedeCredito;
+    private final String notaCredito;                 // por qué no se puede, si no se puede
+    private com.pos.modelo.PlanCredito plan;          // el plan de cuotas armado (F11)
+    private final Label lblPlan = new Label();
+    private final Label lblCredito = new Label();
+    private final HBox filaCredito = new HBox();
+    private final com.pos.servicio.CreditoService creditoService = new com.pos.servicio.CreditoService();
     private TextField campoActivo = efectivo;   // el último campo donde estuvo el cursor (lo usa F5)
     private final Label lblFiado = new Label();
     private final HBox filaFiado = new HBox();   // "A fiado $X": solo se ve cuando hay algo fiado
@@ -66,10 +79,13 @@ public class CobroView extends VBox {
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
 
     // puedeFiar: true solo si la venta tiene un cliente elegido (el cliente general no puede quedar debiendo).
-    public CobroView(BigDecimal total, int articulos, String cliente, boolean puedeFiar,
-                     Runnable alVolver, Consumer<Resultado> alConfirmar) {
+    // puedeCredito: hay un cliente elegido y tiene cédula; notaCredito explica por qué no, si es el caso.
+    public CobroView(BigDecimal total, int articulos, String cliente, boolean puedeFiar, boolean puedeCredito,
+                     String notaCredito, Runnable alVolver, Consumer<Resultado> alConfirmar) {
         this.total = total;
         this.puedeFiar = puedeFiar;
+        this.puedeCredito = puedeCredito;
+        this.notaCredito = notaCredito;
         this.alConfirmar = alConfirmar;
         this.alVolver = alVolver;
         setSpacing(18);
@@ -122,6 +138,19 @@ public class CobroView extends VBox {
             case F4 -> {
                 if (puedeFiar) {
                     irA(fiado);
+                }
+            }
+            case F10 -> {
+                if (puedeCredito) {
+                    irA(credito);
+                }
+            }
+            case F11 -> armarPlan();
+            case F -> {
+                if (e.isControlDown()) {
+                    irA(financiera);
+                } else {
+                    return;
                 }
             }
             case F5 -> completar(campoActivo);
@@ -187,19 +216,38 @@ public class CobroView extends VBox {
         pagos.add(cTarjeta, 1, 1);
         VBox cFiado = tarjetaFiado();
         pagos.add(cFiado, 0, 2, 2, 1);
+        VBox cCredito = tarjetaCredito();
+        pagos.add(cCredito, 0, 3, 2, 1);
+        // Financiera: lo paga una financiera después (no entra a la caja hasta que pague).
+        VBox cFinanciera = tarjetaPago("Financiera  (la paga después)", "Ctrl+F", financiera, false);
+        nombreFinanciera.setEditable(true);
+        nombreFinanciera.setPromptText("Nombre de la financiera");
+        nombreFinanciera.setMaxWidth(Double.MAX_VALUE);
+        try {
+            nombreFinanciera.getItems().setAll(new com.pos.servicio.FinancieraService().nombres());
+        } catch (java.sql.SQLException ex) {
+            // sin sugerencias se escribe a mano
+        }
+        nombreFinanciera.getEditor().textProperty().addListener((o, a, b) -> recalcular());
+        cFinanciera.getChildren().add(nombreFinanciera);
+        pagos.add(cFinanciera, 0, 4, 2, 1);
         for (int i = 0; i < 2; i++) {
             javafx.scene.layout.ColumnConstraints columna = new javafx.scene.layout.ColumnConstraints();
             columna.setPercentWidth(50);
             pagos.getColumnConstraints().add(columna);
         }
-        for (VBox c : List.of(cEfectivo, cTransferencia, cTarjeta, cFiado)) {
+        for (VBox c : List.of(cEfectivo, cTransferencia, cTarjeta, cFiado, cCredito, cFinanciera)) {
             GridPane.setHgrow(c, Priority.ALWAYS);
             c.setMaxWidth(Double.MAX_VALUE);
             c.setPrefWidth(10);   // las dos columnas parten iguales y se reparten el espacio
         }
-        HBox.setHgrow(pagos, Priority.ALWAYS);
+        // Con cinco tarjetas no cabe todo: las tarjetas de pago se desplazan y el resumen queda siempre a la vista.
+        javafx.scene.control.ScrollPane desplazable = new javafx.scene.control.ScrollPane(pagos);
+        desplazable.setFitToWidth(true);
+        desplazable.setStyle("-fx-background-color: transparent; -fx-background: #f4f6f8;");
+        HBox.setHgrow(desplazable, Priority.ALWAYS);
 
-        return new HBox(20, pagos, crearResumen());
+        return new HBox(20, desplazable, crearResumen());
     }
 
     // Una tarjeta con el campo de monto y sus botones rápidos. Cada botón muestra su tecla.
@@ -241,9 +289,47 @@ public class CobroView extends VBox {
         return tarjeta;
     }
 
-    // Los cuatro campos de dinero, en el orden en que aparecen.
+    // La tarjeta de Crédito en cuotas: lo que se financia. Hace falta un cliente con cédula.
+    private VBox tarjetaCredito() {
+        VBox tarjeta = tarjetaPago("Crédito en cuotas  (lo que se financia)", "F10", credito, false);
+        if (!puedeCredito) {
+            credito.setDisable(true);
+            tarjeta.setOpacity(0.6);
+            Label nota = new Label(notaCredito);
+            nota.getStyleClass().addAll("texto-suave", "texto-pequeno");
+            nota.setWrapText(true);
+            tarjeta.getChildren().add(nota);
+        } else {
+            Button plan = new Button("Plan de cuotas");
+            plan.getStyleClass().add("btn-secundario");
+            plan.setGraphic(Atajos.tecla("F11"));
+            plan.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
+            plan.setGraphicTextGap(8);
+            plan.setFocusTraversable(false);
+            plan.setOnAction(e -> armarPlan());
+            lblPlan.getStyleClass().add("texto-suave");
+            lblPlan.setWrapText(true);
+            tarjeta.getChildren().addAll(new HBox(12, plan, lblPlan));
+        }
+        return tarjeta;
+    }
+
+    // F11: abre la ventana para elegir frecuencia, número de cuotas, tasa y primera fecha.
+    private void armarPlan() {
+        BigDecimal cr = puedeCredito ? valor(credito) : BigDecimal.ZERO;
+        if (!puedeCredito || cr.signum() <= 0) {
+            return;
+        }
+        com.pos.modelo.PlanCredito elegido = CreditoPlanDialog.abrir(cr, total, plan);
+        if (elegido != null) {
+            plan = elegido;
+            recalcular();
+        }
+    }
+
+    // Los cinco campos de dinero, en el orden en que aparecen.
     private List<TextField> campos() {
-        return List.of(efectivo, transferencia, tarjeta, fiado);
+        return List.of(efectivo, transferencia, tarjeta, fiado, credito, financiera);
     }
 
     private Button botonRapido(String texto, String tecla, Runnable accion) {
@@ -309,7 +395,26 @@ public class CobroView extends VBox {
         filaFiado.setAlignment(Pos.CENTER_LEFT);
         filaFiado.managedProperty().bind(filaFiado.visibleProperty());
 
-        VBox resumen = new VBox(14, cajaTotal, filaPagado, filaFiado, sep, filaEstado, lblAyuda, relleno, confirmar, teclas);
+        // "En cuotas $X": lo que se financia. Solo se ve si hay crédito.
+        Label etiquetaCredito = new Label("En cuotas");
+        etiquetaCredito.getStyleClass().add("cobro-fila-etiqueta");
+        lblCredito.getStyleClass().addAll("cobro-fila-valor", "texto-peligro");
+        Region e4 = new Region();
+        HBox.setHgrow(e4, Priority.ALWAYS);
+        filaCredito.getChildren().setAll(etiquetaCredito, e4, lblCredito);
+        filaCredito.setAlignment(Pos.CENTER_LEFT);
+        filaCredito.managedProperty().bind(filaCredito.visibleProperty());
+
+        Label etiquetaFinanciera = new Label("Por la financiera");
+        etiquetaFinanciera.getStyleClass().add("cobro-fila-etiqueta");
+        lblFinanciera.getStyleClass().addAll("cobro-fila-valor", "texto-peligro");
+        Region e5 = new Region();
+        HBox.setHgrow(e5, Priority.ALWAYS);
+        filaFinanciera.getChildren().setAll(etiquetaFinanciera, e5, lblFinanciera);
+        filaFinanciera.setAlignment(Pos.CENTER_LEFT);
+        filaFinanciera.managedProperty().bind(filaFinanciera.visibleProperty());
+
+        VBox resumen = new VBox(14, cajaTotal, filaPagado, filaFiado, filaCredito, filaFinanciera, sep, filaEstado, lblAyuda, relleno, confirmar, teclas);
         resumen.getStyleClass().add("card");
         resumen.setPrefWidth(420);
         resumen.setMinWidth(420);
@@ -361,7 +466,27 @@ public class CobroView extends VBox {
     private void recalcular() {
         BigDecimal ef = valor(efectivo);
         BigDecimal fi = puedeFiar ? valor(fiado) : BigDecimal.ZERO;
-        BigDecimal otros = valor(transferencia).add(valor(tarjeta)).add(fi);   // lo que no da vuelto
+        BigDecimal cr = puedeCredito ? valor(credito) : BigDecimal.ZERO;
+        // Con crédito siempre hay un plan: si no existe o quedó de otro valor, se arma uno con las opciones de siempre.
+        if (cr.signum() > 0 && (plan == null || plan.financiado().compareTo(cr) != 0)) {
+            try {
+                plan = plan == null ? CreditoPlanDialog.porDefecto(cr)
+                        : creditoService.simular(cr, plan.frecuencia(), plan.plazo(), plan.tasa(), plan.primeraCuota());
+            } catch (IllegalArgumentException | java.sql.SQLException ex) {
+                plan = null;
+            }
+        }
+        if (cr.signum() == 0) {
+            plan = null;
+        }
+        lblPlan.setText(plan == null ? "" : plan.plazo() + " cuotas " + plan.frecuenciaTexto() + "s de " + Dinero.formato(plan.cuotaValor())
+                + "  ·  tasa " + plan.tasa().toPlainString() + " %  ·  primera " + plan.primeraCuota());
+        lblCredito.setText(Dinero.formato(cr));
+        filaCredito.setVisible(cr.signum() > 0);
+        BigDecimal fn = valor(financiera);
+        lblFinanciera.setText(Dinero.formato(fn));
+        filaFinanciera.setVisible(fn.signum() > 0);
+        BigDecimal otros = valor(transferencia).add(valor(tarjeta)).add(fi).add(cr).add(fn);   // lo que no da vuelto
         BigDecimal entregado = ef.add(otros);
         BigDecimal diferencia = entregado.subtract(total);   // negativo = falta, positivo = sobra
 
@@ -387,8 +512,24 @@ public class CobroView extends VBox {
             confirmar.setDisable(false);
         } else {
             // Con fiado el total queda cubierto, pero una parte todavía se debe: no se llama "pago exacto".
-            estado(fi.signum() > 0 ? "Cubierto, con fiado" : "Pago exacto", "✓", "texto-ok");
+            estado(fi.signum() > 0 || cr.signum() > 0 ? "Cubierto, con deuda" : "Pago exacto", "✓", "texto-ok");
             confirmar.setDisable(false);
+        }
+        if (fn.signum() > 0 && !confirmar.isDisable() && nombreFinanciera.getEditor().getText().isBlank()) {
+            lblAyuda.setText("Escribe el nombre de la financiera.");
+            confirmar.setDisable(true);
+        }
+        // El crédito pide una cuota inicial mínima y un plan armado.
+        if (cr.signum() > 0 && !confirmar.isDisable()) {
+            try {
+                creditoService.validarInicial(total, cr);
+                if (plan == null) {
+                    throw new IllegalArgumentException("Arma el plan de cuotas (F11).");
+                }
+            } catch (IllegalArgumentException | java.sql.SQLException ex) {
+                lblAyuda.setText(ex.getMessage());
+                confirmar.setDisable(true);
+            }
         }
     }
 
@@ -404,10 +545,12 @@ public class CobroView extends VBox {
         BigDecimal tr = valor(transferencia);
         BigDecimal ta = valor(tarjeta);
         BigDecimal fi = puedeFiar ? valor(fiado) : BigDecimal.ZERO;
+        BigDecimal cr = puedeCredito ? valor(credito) : BigDecimal.ZERO;
 
-        // Del efectivo solo se aplica lo que falta después de la tarjeta, la transferencia y el fiado;
+        // Del efectivo solo se aplica lo que falta después de la tarjeta, la transferencia, el fiado y el crédito;
         // lo que sobra es la devolución al cliente.
-        BigDecimal efectivoAplicado = ef.min(total.subtract(tr).subtract(ta).subtract(fi)).max(BigDecimal.ZERO);
+        BigDecimal fn = valor(financiera);
+        BigDecimal efectivoAplicado = ef.min(total.subtract(tr).subtract(ta).subtract(fi).subtract(cr).subtract(fn)).max(BigDecimal.ZERO);
         BigDecimal devolucion = ef.subtract(efectivoAplicado);
 
         List<Pago> pagos = new ArrayList<>();
@@ -423,6 +566,13 @@ public class CobroView extends VBox {
         if (fi.signum() > 0) {
             pagos.add(new Pago("FIADO", fi));
         }
-        alConfirmar.accept(new Resultado(pagos, ef, devolucion));
+        if (cr.signum() > 0) {
+            pagos.add(new Pago("CREDITO", cr));
+        }
+        if (fn.signum() > 0) {
+            pagos.add(new Pago("FINANCIERA", fn));
+        }
+        alConfirmar.accept(new Resultado(pagos, ef, devolucion, cr.signum() > 0 ? plan : null,
+                fn.signum() > 0 ? nombreFinanciera.getEditor().getText().trim() : null));
     }
 }

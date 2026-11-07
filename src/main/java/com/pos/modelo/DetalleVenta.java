@@ -12,6 +12,10 @@ public class DetalleVenta {
     private int cantidad;
     private BigDecimal precioUnit;
     private BigDecimal costoUnit;
+    private BigDecimal precioOriginal;   // el precio normal del producto (precioUnit puede bajarse al cobrar, nunca subirse)
+    private java.util.List<String> imeis = new java.util.ArrayList<>();   // IMEI/serial de cada unidad (equipos)
+    private int garantiaDias;
+    private Integer idCategoria;   // solo para calcular promociones del carrito
 
     public DetalleVenta(){
     }
@@ -72,6 +76,9 @@ public class DetalleVenta {
         this.precioUnit = precioUnit;
     }
 
+    public BigDecimal getPrecioOriginal() { return precioOriginal == null ? precioUnit : precioOriginal; }
+    public void setPrecioOriginal(BigDecimal p) { this.precioOriginal = p; }
+
     public BigDecimal getCostoUnit() {
         return costoUnit;
     }
@@ -79,6 +86,17 @@ public class DetalleVenta {
     public void setCostoUnit(BigDecimal costoUnit) {
         this.costoUnit = costoUnit;
     }
+
+    public java.util.List<String> getImeis() { return imeis; }
+    public void setImeis(java.util.List<String> imeis) { this.imeis = imeis; }
+
+    public int getGarantiaDias() { return garantiaDias; }
+    public void setGarantiaDias(int garantiaDias) { this.garantiaDias = garantiaDias; }
+
+    public Integer getIdCategoria() { return idCategoria; }
+    public void setIdCategoria(Integer idCategoria) { this.idCategoria = idCategoria; }
+
+    public boolean tieneImeis() { return !imeis.isEmpty(); }
 
     @Override
     public String toString(){

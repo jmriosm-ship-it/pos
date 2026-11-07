@@ -36,7 +36,9 @@ public class Permisos {
 
     // Todos los módulos que puede ver (para armar el menú lateral).
     public static Set<Modulo> modulosDe(Usuario usuario) {
-        return modulosDeRol(usuario.getRol());
+        Set<Modulo> todos = EnumSet.copyOf(modulosDeRol(usuario.getRol()));
+        todos.addAll(usuario.getModulosExtra());   // las pantallas extra que el admin le dio a esta persona
+        return todos;
     }
 
     public static synchronized Set<Modulo> modulosDeRol(String rol) {
@@ -52,9 +54,38 @@ public class Permisos {
         return modulos;
     }
 
+    private static Map<String, Set<String>> cacheAcciones;
+
+    // ¿Puede esta persona hacer esta acción en este módulo? El admin siempre; los demás solo si su rol la tiene
+    // (y ven el módulo). "Puede anular" de cada usuario sigue valiendo como permiso extra para anular y devolver.
+    public static boolean puede(Usuario usuario, Modulo modulo, com.pos.modelo.Accion accion) {
+        if (usuario.esAdmin()) {
+            return true;
+        }
+        if (modulo == Modulo.HISTORIAL && accion == com.pos.modelo.Accion.BORRAR && usuario.isPuedeAnular()) {
+            return true;
+        }
+        if (!puedeVer(usuario, modulo)) {
+            return false;
+        }
+        return accionesDeRol(usuario.getRol()).contains(modulo.name() + ":" + accion.name());
+    }
+
+    public static synchronized Set<String> accionesDeRol(String rol) {
+        if (cacheAcciones == null) {
+            try {
+                cacheAcciones = new PermisoDAO().cargarAcciones();
+            } catch (SQLException e) {
+                cacheAcciones = Map.of();
+            }
+        }
+        return cacheAcciones.getOrDefault(rol, Set.of());
+    }
+
     // Olvida lo leído para volver a consultar la base de datos (después de cambiar permisos).
     public static synchronized void recargar() {
         cache = null;
+        cacheAcciones = null;
     }
 
     private static Map<String, Set<Modulo>> cargar() {

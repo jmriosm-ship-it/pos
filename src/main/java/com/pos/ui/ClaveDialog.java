@@ -56,7 +56,7 @@ public class ClaveDialog {
 
         ButtonType guardar = new ButtonType("Cambiar clave", ButtonBar.ButtonData.OK_DONE);
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText(titulo);
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

@@ -58,8 +58,9 @@ public class ProductoDAO {
     // Inserta un producto nuevo y le asigna al objeto el id que generó MySQL.
     public void insertar(Producto p) throws SQLException {
         String sql = "INSERT INTO productos "
-                + "(codigo, nombre, id_categoria, id_proveedor, precio_compra, precio_venta, stock, stock_minimo) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                + "(codigo, nombre, id_categoria, id_proveedor, precio_compra, precio_venta, stock, stock_minimo, "
+                + "marca, condicion, garantia_dias, por_imei, capacidad, color) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         // RETURN_GENERATED_KEYS: pide a MySQL que nos devuelva el id nuevo.
         try (Connection con = Conexion.obtener();
@@ -73,6 +74,7 @@ public class ProductoDAO {
             ps.setBigDecimal(6, p.getPrecioVenta());
             ps.setInt(7, p.getStock());
             ps.setInt(8, p.getStockMinimo());
+            extras(ps, p, 9);
             ps.executeUpdate();   // executeUpdate = INSERT/UPDATE/DELETE (no devuelve filas)
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -86,7 +88,8 @@ public class ProductoDAO {
     // Actualiza los datos de un producto existente (se identifica por su id).
     public void actualizar(Producto p) throws SQLException {
         String sql = "UPDATE productos SET codigo = ?, nombre = ?, id_categoria = ?, id_proveedor = ?, "
-                + "precio_compra = ?, precio_venta = ?, stock_minimo = ? WHERE id = ?";
+                + "precio_compra = ?, precio_venta = ?, stock_minimo = ?, marca = ?, condicion = ?, garantia_dias = ?, "
+                + "por_imei = ?, capacidad = ?, color = ? WHERE id = ?";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -98,7 +101,8 @@ public class ProductoDAO {
             ps.setBigDecimal(5, p.getPrecioCompra());
             ps.setBigDecimal(6, p.getPrecioVenta());
             ps.setInt(7, p.getStockMinimo());
-            ps.setInt(8, p.getId());
+            extras(ps, p, 8);
+            ps.setInt(14, p.getId());
             ps.executeUpdate();
         }
     }
@@ -160,6 +164,20 @@ public class ProductoDAO {
         return lista;
     }
 
+    // El producto al que pertenece un IMEI/serial exacto (null si no existe).
+    public Producto buscarPorImei(String imei) throws SQLException {
+        return consultaUno("SELECT p.* FROM productos p JOIN producto_imeis i ON i.id_producto = p.id WHERE i.imei = ? AND p.activo = TRUE", imei);
+    }
+
+    private Producto consultaUno(String sql, String parametro) throws SQLException {
+        try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, parametro);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? mapear(rs) : null;
+            }
+        }
+    }
+
     // Busca un producto por su id. Devuelve null si no existe.
     public Producto buscarPorId(int id) throws SQLException {
         String sql = "SELECT * FROM productos WHERE id = ?";
@@ -194,7 +212,7 @@ public class ProductoDAO {
     // Busca productos activos por parte del nombre o del código (para el buscador del POS).
     // LIKE '%texto%' = "que contenga el texto en cualquier parte".
     public List<Producto> buscar(String texto) throws SQLException {
-        String sql = "SELECT * FROM productos WHERE activo = TRUE AND (nombre LIKE ? OR codigo LIKE ?) "
+        String sql = "SELECT * FROM productos WHERE activo = TRUE AND (nombre LIKE ? OR codigo LIKE ? OR marca LIKE ? OR id IN (SELECT id_producto FROM producto_imeis WHERE imei LIKE ?)) "
                 + "ORDER BY nombre LIMIT 50";
         List<Producto> lista = new ArrayList<>();
 
@@ -203,6 +221,8 @@ public class ProductoDAO {
             String patron = "%" + texto + "%";
             ps.setString(1, patron);
             ps.setString(2, patron);
+            ps.setString(3, patron);
+            ps.setString(4, patron);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -211,6 +231,20 @@ public class ProductoDAO {
             }
         }
         return lista;
+    }
+
+    // Los 6 datos nuevos (marca, condición, garantía, por IMEI, talla/capacidad, color) desde el parámetro "desde".
+    private void extras(PreparedStatement ps, Producto p, int desde) throws SQLException {
+        ps.setString(desde, vacioANulo(p.getMarca()));
+        ps.setString(desde + 1, p.getCondicion() == null ? "Nuevo" : p.getCondicion());
+        ps.setInt(desde + 2, p.getGarantiaDias());
+        ps.setBoolean(desde + 3, p.isPorImei());
+        ps.setString(desde + 4, vacioANulo(p.getCapacidad()));
+        ps.setString(desde + 5, vacioANulo(p.getColor()));
+    }
+
+    private String vacioANulo(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     // Convierte UNA fila del resultado en un objeto Producto.
@@ -228,6 +262,12 @@ public class ProductoDAO {
         p.setStock(rs.getInt("stock"));
         p.setStockMinimo(rs.getInt("stock_minimo"));
         p.setActivo(rs.getBoolean("activo"));
+        p.setMarca(rs.getString("marca"));
+        p.setCondicion(rs.getString("condicion"));
+        p.setGarantiaDias(rs.getInt("garantia_dias"));
+        p.setPorImei(rs.getBoolean("por_imei"));
+        p.setCapacidad(rs.getString("capacidad"));
+        p.setColor(rs.getString("color"));
         return p;
     }
 }

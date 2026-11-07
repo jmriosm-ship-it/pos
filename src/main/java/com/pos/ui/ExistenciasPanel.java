@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Modulo;
+import com.pos.modelo.Accion;
 import com.pos.modelo.Producto;
 import com.pos.servicio.ProductoService;
 import com.pos.servicio.ReporteService;
@@ -222,6 +224,9 @@ public class ExistenciasPanel extends VBox {
     // ---------------------------------------------------------------- acciones y teclas
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         switch (e.getCode()) {
             case F2 -> {
                 buscador.requestFocus();
@@ -253,6 +258,9 @@ public class ExistenciasPanel extends VBox {
     }
 
     private void ajustar() {
+        if (!Seguridad.permitido(Modulo.INVENTARIO, Accion.EDITAR, "ajustar existencias")) {
+            return;
+        }
         Producto p = elegido();
         if (p != null && AjusteDialog.abrir(p)) {
             recargar();

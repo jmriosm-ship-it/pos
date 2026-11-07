@@ -17,13 +17,14 @@ import java.util.List;
 public class GastoDAO {
 
     public void insertar(Gasto g) throws SQLException {
-        String sql = "INSERT INTO gastos (id_usuario, concepto, monto) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO gastos (id_usuario, concepto, monto, categoria) VALUES (?, ?, ?, ?)";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, g.getIdUsuario());
             ps.setString(2, g.getConcepto());
             ps.setBigDecimal(3, g.getMonto());
+            ps.setString(4, g.getCategoria());
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -52,6 +53,7 @@ public class GastoDAO {
                     g.setIdUsuario(rs.getInt("id_usuario"));
                     g.setNombreUsuario(rs.getString("usuario"));
                     g.setConcepto(rs.getString("concepto"));
+                    g.setCategoria(rs.getString("categoria"));
                     g.setMonto(rs.getBigDecimal("monto"));
                     g.setFecha(rs.getTimestamp("fecha").toLocalDateTime());
                     lista.add(g);

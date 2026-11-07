@@ -84,6 +84,13 @@ public class CajaDAO {
                 + " UNION ALL"
                 // Los abonos de fiados que se recibieron en efectivo en esta caja también cuentan.
                 + " SELECT a.monto FROM abonos_fiado a WHERE a.id_caja = ? AND a.metodo = 'EFECTIVO'"
+                + " UNION ALL"
+                // Ingresos y egresos manuales, y devoluciones de ventas pagadas en efectivo (salen de la caja).
+                + " SELECT CASE m.tipo WHEN 'INGRESO' THEN m.monto ELSE -m.monto END FROM movimientos_caja m WHERE m.id_caja = ?"
+                + " UNION ALL"
+                + " SELECT -d.monto FROM devoluciones d WHERE d.id_caja = ? AND d.metodo = 'EFECTIVO'"
+                + " UNION ALL"
+                + " SELECT cp.valor FROM credito_pagos cp WHERE cp.id_caja = ? AND cp.metodo = 'EFECTIVO'"
                 + ") t";
 
         try (Connection con = Conexion.obtener();
@@ -92,6 +99,9 @@ public class CajaDAO {
             ps.setInt(1, idCaja);
             ps.setInt(2, idCaja);
             ps.setInt(3, idCaja);
+            ps.setInt(4, idCaja);
+            ps.setInt(5, idCaja);
+            ps.setInt(6, idCaja);
 
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();

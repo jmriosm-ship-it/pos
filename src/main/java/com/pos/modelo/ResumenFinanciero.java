@@ -19,5 +19,6 @@ public record ResumenFinanciero(
         BigDecimal gananciaBruta,
         BigDecimal gastos,
         BigDecimal gananciaNeta,
-        BigDecimal ticketPromedio) {
+        BigDecimal ticketPromedio,
+        BigDecimal intereses) {   // intereses de créditos cobrados en el periodo (suman a la ganancia neta)
 }

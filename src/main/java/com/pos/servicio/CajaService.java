@@ -10,6 +10,7 @@ import java.sql.SQLException;
 public class CajaService {
 
     private final CajaDAO cajaDAO = new CajaDAO();
+    private final com.pos.dao.MovimientoCajaDAO movimientos = new com.pos.dao.MovimientoCajaDAO();
 
     // Abre una caja para el usuario.
     // Reglas: monto válido y una sola caja abierta por usuario.
@@ -41,6 +42,36 @@ public class CajaService {
         return cajaDAO.totalEfectivoVentas(caja.getId());
     }
 
+    // Ingreso (meter plata a la caja) o egreso (sacarla) manual, siempre con su motivo.
+    public void registrarMovimiento(Usuario usuario, Caja caja, String tipo, BigDecimal monto, String motivo) throws SQLException {
+        validarMovimiento(caja, monto, motivo);
+        movimientos.insertar(caja.getId(), usuario.getId(), tipo, monto, motivo.trim());
+        AuditoriaService.registrar(usuario, "INGRESO".equals(tipo) ? "Ingreso de caja" : "Egreso de caja", monto.toPlainString() + " · " + motivo.trim());
+    }
+
+    // Devolución de dinero a un cliente sin venta de por medio: sale de la caja y queda como gasto "Devoluciones".
+    public void devolucionDeDinero(Usuario usuario, Caja caja, BigDecimal monto, String motivo) throws SQLException {
+        validarMovimiento(caja, monto, motivo);
+        movimientos.insertar(caja.getId(), usuario.getId(), "EGRESO", monto, "Devolución: " + motivo.trim());
+        new GastoService().registrar(usuario, "Devoluciones", "Devolución: " + motivo.trim(), monto);
+    }
+
+    public java.util.List<com.pos.modelo.MovimientoCaja> movimientos(Caja caja) throws SQLException {
+        return movimientos.listar(caja.getId());
+    }
+
+    private void validarMovimiento(Caja caja, BigDecimal monto, String motivo) {
+        if (caja == null || !caja.estaAbierta()) {
+            throw new IllegalStateException("Debes tener la caja abierta.");
+        }
+        if (monto == null || monto.signum() <= 0) {
+            throw new IllegalArgumentException("El valor debe ser mayor a cero.");
+        }
+        if (motivo == null || motivo.isBlank()) {
+            throw new IllegalArgumentException("Escribe el motivo.");
+        }
+    }
+
     // Cierra la caja y calcula el arqueo:
     //   esperado   = monto inicial + ventas en efectivo
     //   diferencia = contado - esperado   (negativo = falta plata, positivo = sobra)
@@ -59,6 +90,7 @@ public class CajaService {
         caja.setMontoContado(montoContado);
         caja.setDiferencia(montoContado.subtract(esperado));
         cajaDAO.cerrar(caja);
+        AuditoriaService.registrar(null, "Caja cerrada", "caja " + caja.getId() + " · contado " + montoContado.toPlainString() + " · dif " + caja.getDiferencia().toPlainString());
         caja.setEstado("CERRADA");
         caja.setCerradaEn(java.time.LocalDateTime.now());   // para el comprobante (la base guardó la hora con NOW())
         return caja;

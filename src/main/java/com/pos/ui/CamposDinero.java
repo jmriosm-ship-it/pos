@@ -11,6 +11,13 @@ public class CamposDinero {
     private CamposDinero() {
     }
 
+    // Igual pero con letra normal, para formularios y diálogos.
+    public static TextField compacto() {
+        TextField campo = crear();
+        campo.setStyle("-fx-font-size: 13px; -fx-font-weight: normal; -fx-padding: 8 10;");
+        return campo;
+    }
+
     // Crea un campo de monto grande (el mismo estilo del cobro).
     public static TextField crear() {
         TextField campo = new TextField();

@@ -38,6 +38,10 @@ public class ProductoDialog {
         TextField venta = new TextField();
         TextField stock = new TextField();
         TextField minimo = new TextField();
+        TextField marca = new TextField();
+        TextField tamano = new TextField();
+        marca.setPromptText("Ej: Carolina Herrera");
+        tamano.setPromptText("Ej: 100 ml");
         ComboBox<Categoria> categoria = new ComboBox<>();
         ComboBox<Proveedor> proveedor = new ComboBox<>();
         categoria.setPromptText("Sin categoría");
@@ -61,6 +65,8 @@ public class ProductoDialog {
             venta.setText(Dinero.plano(original.getPrecioVenta()));
             stock.setText(String.valueOf(original.getStock()));
             minimo.setText(String.valueOf(original.getStockMinimo()));
+            marca.setText(original.getMarca());
+            tamano.setText(original.getCapacidad());
             for (Categoria c : categoria.getItems()) {
                 if (original.getIdCategoria() != null && c.getId() == original.getIdCategoria()) {
                     categoria.setValue(c);
@@ -83,6 +89,7 @@ public class ProductoDialog {
         agregar(formulario, 1, "Categoría", categoria, "Proveedor", proveedor);
         agregar(formulario, 2, "Precio de compra", compra, "Precio de venta", venta);
         agregar(formulario, 3, nuevo ? "Stock inicial" : "Stock actual", stock, "Stock mínimo", minimo);
+        agregar(formulario, 4, "Marca", marca, "Tamaño / presentación", tamano);
 
         Label error = new Label();
         error.getStyleClass().add("error-texto");
@@ -92,7 +99,7 @@ public class ProductoDialog {
 
         ButtonType guardar = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText(nuevo ? "Nuevo producto" : "Editar producto");
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);
@@ -117,6 +124,14 @@ public class ProductoDialog {
                 p.setStock(entero(stock.getText(), "El stock"));
                 p.setStockMinimo(entero(minimo.getText(), "El stock mínimo"));
                 p.setActivo(true);
+                p.setMarca(marca.getText());
+                p.setCapacidad(tamano.getText());
+                if (!nuevo) {   // lo que este formulario no muestra se conserva
+                    p.setCondicion(original.getCondicion());
+                    p.setGarantiaDias(original.getGarantiaDias());
+                    p.setPorImei(original.isPorImei());
+                    p.setColor(original.getColor());
+                }
                 servicio.guardar(p);
                 guardado[0] = true;
             } catch (IllegalArgumentException ex) {

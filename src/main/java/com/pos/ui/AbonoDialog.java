@@ -93,7 +93,7 @@ public class AbonoDialog {
 
         ButtonType guardar = new ButtonType("Registrar abono", ButtonBar.ButtonData.OK_DONE);
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText("Abono de " + cliente.getNombre());
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

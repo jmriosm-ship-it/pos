@@ -29,7 +29,7 @@ public class TicketDialog {
         ButtonType cerrar = new ButtonType("Cerrar", ButtonBar.ButtonData.OK_DONE);
 
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText(encabezado);
         dialogo.getDialogPane().setContent(area);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

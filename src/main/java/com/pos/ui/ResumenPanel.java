@@ -43,9 +43,9 @@ import java.util.Map;
 public class ResumenPanel extends ScrollPane {
 
     private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM");
-    private static final String[] METODOS = {"EFECTIVO", "TARJETA", "TRANSFERENCIA", "FIADO"};
-    private static final String[] NOMBRES = {"Efectivo", "Tarjeta", "Transferencia", "Fiado (por cobrar)"};
-    private static final String[] COLORES = {"#2563eb", "#14b8a6", "#7c3aed", "#f59e0b"};
+    private static final String[] METODOS = {"EFECTIVO", "TARJETA", "TRANSFERENCIA", "FIADO", "CREDITO", "FINANCIERA"};
+    private static final String[] NOMBRES = {"Efectivo", "Tarjeta", "Transferencia", "Fiado (por cobrar)", "Crédito (por cobrar)", "Financiera (por cobrar)"};
+    private static final String[] COLORES = {"#2563eb", "#14b8a6", "#7c3aed", "#f59e0b", "#ef4444", "#64748b"};
 
     private final ReporteService reportes = new ReporteService();
     private final GastoService gastos = new GastoService();
@@ -84,6 +84,8 @@ public class ResumenPanel extends ScrollPane {
             // Fila 2: ventas por día y cómo pagaron
             VBox grafica = caja("Ventas por día", crearGrafica(reportes.ventasPorDia(desde, hasta), desde, hasta));
             HBox.setHgrow(grafica, Priority.ALWAYS);
+            grafica.setMinWidth(0);   // la gráfica se encoge antes de empujar la tarjeta de pagos fuera de la pantalla
+            grafica.setPrefWidth(10);
             VBox pagos = caja("Cómo pagaron", crearPagos(reportes.ventasPorMetodoPago(desde, hasta)));
             pagos.setPrefWidth(340);
             pagos.setMinWidth(340);
@@ -92,9 +94,24 @@ public class ResumenPanel extends ScrollPane {
             // Fila 3: más vendidos
             VBox top = caja("Más vendidos", crearTop(reportes.masVendidos(desde, hasta, 5)));
 
+            // Fila 4: ganancia por categoría y ventas por vendedor
+            VBox porCategoria = caja("Ganancia por categoría", listaCategorias(reportes.gananciaPorCategoria(desde, hasta)));
+            VBox porVendedor = caja("Ventas por vendedor (menos devoluciones)", listaVendedores(desde, hasta));
+            HBox.setHgrow(porCategoria, Priority.ALWAYS);
+            HBox.setHgrow(porVendedor, Priority.ALWAYS);
+            porCategoria.setPrefWidth(10);
+            porVendedor.setPrefWidth(10);
+            HBox fila4 = new HBox(10, porCategoria, porVendedor);
+
             Label periodoTexto = new Label("Periodo: " + periodo.texto());
             periodoTexto.getStyleClass().add("texto-suave");
-            raiz.getChildren().addAll(periodoTexto, tarjetas, fila2, top);
+            raiz.getChildren().addAll(periodoTexto, tarjetas);
+            if (r.intereses().signum() > 0) {   // solo si hubo créditos cobrados
+                Label interes = new Label("Incluye " + Dinero.formato(r.intereses()) + " de intereses de créditos cobrados.");
+                interes.getStyleClass().add("texto-suave");
+                raiz.getChildren().add(interes);
+            }
+            raiz.getChildren().addAll(fila2, top, fila4);
         } catch (SQLException | IllegalArgumentException e) {
             raiz.getChildren().add(new Label("No se pudo calcular el resumen: " + e.getMessage()));
         }
@@ -187,7 +204,7 @@ public class ResumenPanel extends ScrollPane {
             tramo.setMinHeight(14);
             tramo.setStyle("-fx-background-color: " + COLORES[i] + ";");
             tramo.prefWidthProperty().bind(barra.widthProperty().multiply(fraccion));
-            tramo.minWidthProperty().bind(tramo.prefWidthProperty());
+            tramo.setMinWidth(0);   // el mínimo NO sigue al ancho: si no, la barra nunca podría encogerse
             tramo.maxWidthProperty().bind(tramo.prefWidthProperty());
             barra.getChildren().add(tramo);
 
@@ -213,6 +230,65 @@ public class ResumenPanel extends ScrollPane {
         recorte.setHeight(14);
         barra.setClip(recorte);
         return new VBox(12, barra, leyenda);
+    }
+
+    // Cada categoría con lo vendido y lo que dejó de ganancia.
+    private Node listaCategorias(List<com.pos.dao.ReporteDAO.FilaCategoria> lista) {
+        VBox caja = new VBox(2);
+        if (lista.isEmpty()) {
+            Label vacio = new Label("Sin ventas en este periodo.");
+            vacio.getStyleClass().add("texto-suave");
+            caja.getChildren().add(vacio);
+        }
+        for (var c : lista) {
+            Label nombre = new Label(c.nombre());
+            Label vendido = new Label(Dinero.formato(c.ingresos()));
+            vendido.getStyleClass().add("texto-suave");
+            Label ganancia = new Label(Dinero.formato(c.ganancia()));
+            ganancia.getStyleClass().add("linea-nombre");
+            ganancia.setMinWidth(100);
+            ganancia.setAlignment(Pos.CENTER_RIGHT);
+            Region espacio = new Region();
+            HBox.setHgrow(espacio, Priority.ALWAYS);
+            HBox fila = new HBox(12, nombre, espacio, vendido, ganancia);
+            fila.setAlignment(Pos.CENTER_LEFT);
+            fila.getStyleClass().add("linea");
+            caja.getChildren().add(fila);
+        }
+        return caja;
+    }
+
+    // Cuánto vendió cada trabajador activo en el periodo (netas, sin lo devuelto).
+    private Node listaVendedores(LocalDate desde, LocalDate hasta) throws SQLException {
+        VBox caja = new VBox(2);
+        com.pos.servicio.NominaService nomina = new com.pos.servicio.NominaService();
+        boolean alguno = false;
+        for (com.pos.modelo.Usuario u : new com.pos.servicio.UsuarioService().listar()) {
+            BigDecimal[] v = nomina.ventas(u, desde, hasta);
+            if (v[0].signum() == 0) {
+                continue;
+            }
+            alguno = true;
+            Label nombre = new Label(u.getNombre());
+            Label cantidad = new Label(v[0].toBigInteger() + (v[0].intValue() == 1 ? " venta" : " ventas"));
+            cantidad.getStyleClass().add("texto-suave");
+            Label total = new Label(Dinero.formato(v[1]));
+            total.getStyleClass().add("linea-nombre");
+            total.setMinWidth(100);
+            total.setAlignment(Pos.CENTER_RIGHT);
+            Region espacio = new Region();
+            HBox.setHgrow(espacio, Priority.ALWAYS);
+            HBox fila = new HBox(12, nombre, espacio, cantidad, total);
+            fila.setAlignment(Pos.CENTER_LEFT);
+            fila.getStyleClass().add("linea");
+            caja.getChildren().add(fila);
+        }
+        if (!alguno) {
+            Label vacio = new Label("Sin ventas en este periodo.");
+            vacio.getStyleClass().add("texto-suave");
+            caja.getChildren().add(vacio);
+        }
+        return caja;
     }
 
     private Node crearTop(List<ProductoVendido> lista) {

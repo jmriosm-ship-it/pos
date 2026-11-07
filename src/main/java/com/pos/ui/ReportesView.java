@@ -18,8 +18,8 @@ import java.time.LocalDate;
 
 /**
  * Módulo Reportes: arriba el periodo (Hoy, 7 días, Este mes u otro rango) y debajo tres pestañas que lo
- * comparten: Resumen (Alt+1), Ventas (Alt+2) y Gastos (Alt+3).
- * Teclas: F6 cambia el periodo · F8 exporta el resumen · Alt+1..3 cambia de pestaña.
+ * comparten: Resumen (Alt+1), Ventas (Alt+2), Gastos (Alt+3), Movimientos (Alt+4), Calendario (Alt+5) y Facturas (Alt+6).
+ * Teclas: F10 cambia el periodo · F11 exporta el resumen · Alt+1..3 cambia de pestaña.
  */
 public class ReportesView extends VBox {
 
@@ -30,6 +30,9 @@ public class ReportesView extends VBox {
     private final ResumenPanel resumen = new ResumenPanel(periodo);
     private final VentasHistorialPanel ventas = new VentasHistorialPanel(periodo);
     private final GastosPanel gastos = new GastosPanel(periodo);
+    private final HistorialPanel historial = new HistorialPanel(periodo);
+    private final CalendarioPanel calendario = new CalendarioPanel();
+    private final FacturasPanel facturas = new FacturasPanel();
     private final TabPane pestanas = new TabPane();
     private boolean ignorar = false;
 
@@ -55,14 +58,20 @@ public class ReportesView extends VBox {
         });
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox barra = new HBox(12, chips, espacio, Atajos.etiqueta("F6", "Cambiar periodo"), Atajos.etiqueta("F8", "Exportar"));
+        HBox barra = new HBox(12, chips, espacio, Atajos.etiqueta("F10", "Cambiar periodo"), Atajos.etiqueta("F11", "Exportar"));
         barra.setAlignment(Pos.CENTER_LEFT);
 
         // Pestañas
         Tab pResumen = pestana("Resumen", "Alt+1", resumen);
         Tab pVentas = pestana("Ventas", "Alt+2", ventas);
         Tab pGastos = pestana("Gastos", "Alt+3", gastos);
-        pestanas.getTabs().addAll(pResumen, pVentas, pGastos);
+        Tab pMovimientos = pestana("Movimientos", "Alt+4", historial);
+        Tab pCalendario = pestana("Calendario", "Alt+5", calendario);
+        Tab pFacturas = pestana("Facturas", "Alt+6", facturas);
+        pestanas.getTabs().addAll(pResumen, pVentas, pGastos, pMovimientos, pCalendario, pFacturas);
+        pMovimientos.setOnSelectionChanged(e -> { if (pMovimientos.isSelected()) historial.recargar(); });
+        pCalendario.setOnSelectionChanged(e -> { if (pCalendario.isSelected()) calendario.recargar(); });
+        pFacturas.setOnSelectionChanged(e -> { if (pFacturas.isSelected()) facturas.recargar(); });
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         pResumen.setOnSelectionChanged(e -> { if (pResumen.isSelected()) resumen.recargar(); });
         pVentas.setOnSelectionChanged(e -> { if (pVentas.isSelected()) ventas.recargar(); });
@@ -110,18 +119,18 @@ public class ReportesView extends VBox {
 
     private void tecla(KeyEvent e) {
         if (e.isAltDown() && e.getCode().ordinal() >= KeyCode.DIGIT1.ordinal()
-                && e.getCode().ordinal() <= KeyCode.DIGIT3.ordinal()) {
+                && e.getCode().ordinal() < KeyCode.DIGIT1.ordinal() + pestanas.getTabs().size()) {
             pestanas.getSelectionModel().select(e.getCode().ordinal() - KeyCode.DIGIT1.ordinal());
             e.consume();
             return;
         }
         switch (e.getCode()) {
-            case F6 -> {
+            case F10 -> {
                 // Cicla Hoy → 7 días → Este mes → Hoy (el rango a mano se elige con el chip).
                 int actual = (Integer) Chips.valor(chipsPeriodo);
                 chipsPeriodo.selectToggle(chipsPeriodo.getToggles().get(actual >= MES ? HOY : actual + 1));
             }
-            case F8 -> exportar();
+            case F11 -> exportar();
             default -> {
                 return;
             }

@@ -36,6 +36,7 @@ public class UsuarioService {
         u.setClaveHash(BCrypt.hashpw(clave, BCrypt.gensalt()));
         u.setIdRol(idRol);
         usuarioDAO.insertar(u);
+        AuditoriaService.registrar(quienCrea, "Usuario creado", u.getUsuario());
         return u;
     }
 
@@ -46,6 +47,7 @@ public class UsuarioService {
             throw new IllegalStateException("No puedes quitarte a ti mismo el rol de administrador.");
         }
         usuarioDAO.actualizar(objetivo);
+        AuditoriaService.registrar(quienEdita, "Usuario editado", objetivo.getUsuario());
     }
 
     // Un usuario cambia su PROPIA clave: debe saber la actual.
@@ -63,6 +65,7 @@ public class UsuarioService {
         exigirAdmin(quienRestablece);
         validarClave(claveNueva);
         usuarioDAO.cambiarClave(objetivo.getId(), BCrypt.hashpw(claveNueva, BCrypt.gensalt()));
+        AuditoriaService.registrar(quienRestablece, "Clave restablecida", objetivo.getUsuario());
     }
 
     // Activa o desactiva a un usuario. No puedes desactivarte a ti mismo.
@@ -72,6 +75,7 @@ public class UsuarioService {
             throw new IllegalStateException("No puedes desactivar tu propio usuario.");
         }
         usuarioDAO.cambiarActivo(objetivo.getId(), activo);
+        AuditoriaService.registrar(quienEdita, activo ? "Usuario activado" : "Usuario desactivado", objetivo.getUsuario());
         objetivo.setActivo(activo);
     }
 

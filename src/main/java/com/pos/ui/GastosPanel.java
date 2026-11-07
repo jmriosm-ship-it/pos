@@ -41,6 +41,7 @@ public class GastosPanel extends VBox {
 
     private final TextField concepto = new TextField();
     private final TextField monto = CamposDinero.crear();
+    private final javafx.scene.control.ComboBox<String> categoria = new javafx.scene.control.ComboBox<>();
     private final Label error = new Label();
     private final Label total = new Label();
     private final TableView<Gasto> tabla = new TableView<>();
@@ -70,7 +71,10 @@ public class GastosPanel extends VBox {
 
         VBox colConcepto = campo("Concepto", Atajos.tecla("F2"), concepto);
         HBox.setHgrow(colConcepto, Priority.ALWAYS);
-        HBox entrada = new HBox(10, colConcepto, campo("Monto", null, monto), agregar);
+        categoria.getItems().addAll(GastoService.CATEGORIAS);
+        categoria.getSelectionModel().select("Otros");
+        categoria.setPrefWidth(180);
+        HBox entrada = new HBox(10, campo("Categoría", null, categoria), colConcepto, campo("Monto", null, monto), agregar);
         entrada.setAlignment(Pos.BOTTOM_LEFT);
         error.getStyleClass().add("error-texto");
         error.managedProperty().bind(error.textProperty().isNotEmpty());
@@ -81,7 +85,8 @@ public class GastosPanel extends VBox {
         tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         tabla.setPlaceholder(new Label("No hay gastos en este periodo."));
         tabla.getColumns().add(Tablas.columna("Fecha", 150, (Gasto g) -> g.getFecha().format(FECHA)));
-        tabla.getColumns().add(Tablas.columna("Concepto", 320, (Gasto g) -> g.getConcepto()));
+        tabla.getColumns().add(Tablas.columna("Categoría", 150, (Gasto g) -> g.getCategoria()));
+        tabla.getColumns().add(Tablas.columna("Concepto", 280, (Gasto g) -> g.getConcepto()));
         tabla.getColumns().add(Tablas.columna("Monto", 130, (Gasto g) -> Dinero.formato(g.getMonto())));
         tabla.getColumns().add(Tablas.columna("Registró", 160, (Gasto g) -> g.getNombreUsuario()));
         tabla.setOnKeyPressed(e -> {
@@ -140,6 +145,9 @@ public class GastosPanel extends VBox {
     // ---------------------------------------------------------------- acciones
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         if (e.getCode() == KeyCode.F2) {
             concepto.requestFocus();
             concepto.selectAll();
@@ -149,7 +157,7 @@ public class GastosPanel extends VBox {
 
     private void agregar() {
         try {
-            servicio.registrar(usuario, concepto.getText(), CamposDinero.valor(monto));
+            servicio.registrar(usuario, categoria.getValue(), concepto.getText(), CamposDinero.valor(monto));
             concepto.clear();
             monto.clear();
             error.setText("");

@@ -46,7 +46,7 @@ public class ReciboService {
         }
         sb.append(raya(ancho)).append('\n');
 
-        sb.append("Recibo No. ").append(v.getId()).append('\n');
+        sb.append("Recibo No. ").append(v.getNumero().replace("#", "")).append('\n');
         if (v.getFecha() != null) {
             sb.append("Fecha: ").append(v.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append('\n');
         }
@@ -62,6 +62,12 @@ public class ReciboService {
         sb.append(raya(ancho)).append('\n');
 
         sb.append(izqDer("Subtotal", dinero(v.getSubtotal()), ancho)).append('\n');
+        if (v.getDescuentoPromo() != null && v.getDescuentoPromo().signum() > 0) {
+            sb.append(izqDer("Promociones", "-" + dinero(v.getDescuentoPromo()), ancho)).append('\n');
+        }
+        if (v.getDescuentoPuntos() != null && v.getDescuentoPuntos().signum() > 0) {
+            sb.append(izqDer("Puntos (" + v.getPuntosUsados() + ")", "-" + dinero(v.getDescuentoPuntos()), ancho)).append('\n');
+        }
         if (v.getDescuento().signum() > 0) {
             sb.append(izqDer("Descuento", "-" + dinero(v.getDescuento()), ancho)).append('\n');
         }

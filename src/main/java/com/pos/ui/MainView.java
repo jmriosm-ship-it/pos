@@ -50,11 +50,16 @@ public class MainView extends BorderPane {
     // Los módulos en el orden en que salen en el menú: Ctrl+1 es el primero, Ctrl+2 el segundo...
     private final List<Modulo> ordenMenu = new ArrayList<>();
     private final EventHandler<KeyEvent> manejadorAtajos = this::atajo;
+    private boolean abrirPestanaCaja = false;   // true cuando se entra a Ventas pidiendo la pestaña de caja
+    private javafx.scene.Node menuLateral;      // el menú de la izquierda
+    private javafx.scene.Node barraSuperior;    // la barra de arriba (título, caja, fecha)
 
     public MainView(Runnable alCerrarSesion) {
         getStyleClass().add("app-bg");
-        setLeft(crearMenu(alCerrarSesion));
-        setTop(crearBarraSuperior());
+        menuLateral = crearMenu(alCerrarSesion);
+        barraSuperior = crearBarraSuperior();
+        setLeft(menuLateral);
+        setTop(barraSuperior);
         contenido.setPadding(new Insets(20, 24, 20, 24));
         setCenter(contenido);
         // Ctrl + número se conecta a la ventana cuando esta pantalla entra en ella y se suelta al salir.
@@ -71,6 +76,27 @@ public class MainView extends BorderPane {
 
     // Ctrl + 1...9 = ir al módulo que tenga ese número en el menú.
     private void atajo(KeyEvent e) {
+        if (e.isControlDown() && e.getCode() == KeyCode.H) {   // Ctrl + H = ayuda y documentos legales
+            AyudaDialog.abrir();
+            e.consume();
+            return;
+        }
+        if (e.isControlDown() && e.getCode() == KeyCode.B) {   // Ctrl + B = mostrar u ocultar el menú
+            alternarMenu();
+            e.consume();
+            return;
+        }
+        // Ctrl + U = sacar algo del local a cuenta del cupo (cualquiera) · Ctrl + M = pagar sueldo (solo admin).
+        if (e.isControlDown() && e.getCode() == KeyCode.U) {
+            SacarCupoDialog.abrir(null);
+            e.consume();
+            return;
+        }
+        if (e.isControlDown() && e.getCode() == KeyCode.M && usuario.esAdmin()) {
+            PagarSueldoDialog.abrir(null);
+            e.consume();
+            return;
+        }
         // Ctrl + K = cambiar mi propia clave (cualquier usuario).
         if (e.isControlDown() && e.getCode() == KeyCode.K) {
             if (ClaveDialog.cambiarMia()) {
@@ -99,31 +125,44 @@ public class MainView extends BorderPane {
     }
 
     // Cambia la pantalla del centro y marca el botón activo del menú.
-    public void ir(Modulo modulo) {
-        if (!Permisos.puedeVer(usuario, modulo)) {
+    public void ir(Modulo pedido) {
+        // La caja es una pestaña de Ventas: pedirla abre Ventas con esa pestaña elegida.
+        Modulo modulo = pedido == Modulo.CAJA ? Modulo.VENTAS : pedido;
+        abrirPestanaCaja = pedido == Modulo.CAJA;
+        if (!Permisos.puedeVer(usuario, pedido) || botones.get(modulo) == null) {
             return;
         }
         botones.values().forEach(b -> b.getStyleClass().remove("activo"));
         botones.get(modulo).getStyleClass().add("activo");
         titulo.setText(modulo.getTitulo());
+        // En Ventas se trabaja en pantalla completa: sin menú ni barra de arriba (el botón Menú de la caja los trae de vuelta).
+        boolean pantallaCompleta = modulo == Modulo.VENTAS;
+        setLeft(pantallaCompleta ? null : menuLateral);
+        setTop(pantallaCompleta ? null : barraSuperior);
         contenido.getChildren().setAll(crearVista(modulo));
         actualizarCaja();
+    }
+
+    // Muestra u oculta el menú lateral estando en Ventas (botón Menú o Ctrl + B).
+    public void alternarMenu() {
+        setLeft(getLeft() == null ? menuLateral : null);
     }
 
     // Qué pantalla corresponde a cada módulo. Los que faltan muestran "próximamente".
     private Node crearVista(Modulo modulo) {
         return switch (modulo) {
             case DASHBOARD -> new DashboardView(this::ir);
-            case VENTAS -> new VentasView(this::actualizarCaja);
+            case VENTAS -> new VentasCajaView(this::actualizarCaja, abrirPestanaCaja, this::alternarMenu, this::ir);
             case PRODUCTOS -> new ProductosView();
             case CATEGORIAS_PROVEEDORES -> new CategoriasProveedoresView();
             case CLIENTES -> new ClientesView();
             case INVENTARIO -> new InventarioView();
             case USUARIOS -> new UsuariosView();
             case REPORTES -> new ReportesView();
+            case HISTORIAL -> new HistorialVentasView();
             case COPIAS -> new CopiasView();
             case CONFIGURACION -> new ConfiguracionView();
-            case CAJA -> new CajaView(this::actualizarCaja);
+            case CAJA -> new VentasCajaView(this::actualizarCaja, true, this::alternarMenu, this::ir);
             default -> new ProximamenteView(modulo);
         };
     }
@@ -149,16 +188,17 @@ public class MainView extends BorderPane {
         } catch (SQLException e) {
             negocio = "Mi Negocio";
         }
-        Label marca = new Label("POS 2.0");
+        Label marca = new Label(negocio);
         marca.getStyleClass().add("marca");
-        Label sub = new Label(negocio);
+        Label sub = new Label(Marca.PRODUCTO.toUpperCase());
         sub.getStyleClass().add("marca-sub");
         VBox cabecera = new VBox(2, marca, sub);
-        cabecera.setPadding(new Insets(4, 8, 18, 8));
+        cabecera.getStyleClass().add("marca-caja");
 
         VBox menu = new VBox(3);
+        menu.setPadding(new Insets(14, 12, 0, 12));
         for (Modulo m : Modulo.values()) {
-            if (!Permisos.puedeVer(usuario, m)) {
+            if (!Permisos.puedeVer(usuario, m) || m == Modulo.CAJA) {   // Caja es una pestaña de Ventas
                 continue;
             }
             ordenMenu.add(m);
@@ -209,11 +249,12 @@ public class MainView extends BorderPane {
             }
         });
 
-        Label ayudaMenu = new Label("Ctrl + número: módulos  ·  Ctrl + K: mi clave");
+        Label ayudaMenu = new Label("Ctrl + número: módulos  ·  Ctrl + H: ayuda");
         ayudaMenu.getStyleClass().add("menu-ayuda");
-        ayudaMenu.setPadding(new Insets(10, 4, 10, 8));
+        ayudaMenu.setPadding(new Insets(10, 4, 10, 20));
 
         VBox lateral = new VBox(cabecera, menu, ayudaMenu, espacio, pie);
+        VBox.setMargin(pie, new Insets(0, 12, 0, 12));
         lateral.getStyleClass().add("sidebar");
         lateral.setPrefWidth(284);
         lateral.setMinWidth(284);
@@ -248,6 +289,7 @@ public class MainView extends BorderPane {
             case CLIENTES -> Iconos.CLIENTES;
             case USUARIOS -> Iconos.USUARIOS;
             case REPORTES -> Iconos.REPORTES;
+            case HISTORIAL -> Iconos.INVENTARIO;
             case COPIAS -> Iconos.COPIAS;
             case CONFIGURACION -> Iconos.CONFIGURACION;
         };

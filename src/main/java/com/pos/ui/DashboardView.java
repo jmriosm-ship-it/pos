@@ -68,6 +68,54 @@ public class DashboardView extends ScrollPane {
         metricas.getChildren().add(metrica("Stock bajo", String.valueOf(stockBajo.size()),
                 "productos por reponer", !stockBajo.isEmpty()));
 
+        // Fila 1b: lo que se debe, lo que hay en bodega y la ganancia del mes (según lo que cada usuario puede ver)
+        HBox metricas2 = new HBox(14);
+        if (Permisos.puedeVer(usuario, Modulo.CLIENTES)) {
+            java.math.BigDecimal fiado = java.math.BigDecimal.ZERO;
+            for (com.pos.modelo.Cliente c : new com.pos.dao.ClienteDAO().listarConResumen()) {
+                fiado = fiado.add(c.getSaldoPendiente() == null ? java.math.BigDecimal.ZERO : c.getSaldoPendiente());
+            }
+            com.pos.servicio.CreditoService creditos = new com.pos.servicio.CreditoService();
+            java.math.BigDecimal enCreditos = java.math.BigDecimal.ZERO;
+            int enMora = 0;
+            for (com.pos.dao.CreditoDAO.Fila f : creditos.listar(true)) {
+                com.pos.servicio.CreditoService.Estado e = creditos.estado(f);
+                enCreditos = enCreditos.add(e.saldo());
+                if (e.mora().signum() > 0) {
+                    enMora++;
+                }
+            }
+            java.math.BigDecimal financieras = new com.pos.servicio.FinancieraService().totalPorCobrar();
+            java.math.BigDecimal porCobrar = fiado.add(enCreditos).add(financieras);
+            metricas2.getChildren().add(metrica("Por cobrar", Dinero.formato(porCobrar),
+                    "fiado, créditos y financiera" + (enMora > 0 ? " · " + enMora + " en mora" : ""), enMora > 0));
+        }
+        if (Permisos.puedeVer(usuario, Modulo.INVENTARIO) || usuario.esAdmin()) {
+            List<Producto> todos = new com.pos.dao.ProductoDAO().listar();
+            int unidades = todos.stream().mapToInt(Producto::getStock).sum();
+            metricas2.getChildren().add(metrica("En bodega", unidades + " unidades", todos.size() + " productos", false));
+        }
+        if (usuario.esAdmin()) {
+            ResumenFinanciero mes = reportes.resumen(hoy.withDayOfMonth(1), hoy);
+            metricas2.getChildren().add(metrica("Ganancia neta del mes", Dinero.formato(mes.gananciaNeta()),
+                    mes.numeroVentas() + " ventas · ingresos " + Dinero.formato(mes.ingresos()), mes.gananciaNeta().signum() < 0));
+        }
+
+        // Avisos (solo administrador): cuotas por avisar y productos por reponer según lo que se vende.
+        VBox avisos = new VBox(8);
+        if (usuario.esAdmin()) {
+            int cuotas = new com.pos.servicio.CreditoService().avisosPendientes().size();
+            if (cuotas > 0) {
+                avisos.getChildren().add(aviso("Hay " + cuotas + (cuotas == 1 ? " cuota" : " cuotas")
+                        + " por avisar a los clientes por WhatsApp.", "Ir a Créditos", Modulo.CLIENTES, ir));
+            }
+            int porReponer = new com.pos.servicio.InteligenteService().porReponer().size();
+            if (porReponer > 0) {
+                avisos.getChildren().add(aviso(porReponer + (porReponer == 1 ? " producto se está acabando" : " productos se están acabando")
+                        + " según lo que se vende.", "Ver qué reponer", Modulo.INVENTARIO, ir));
+            }
+        }
+
         // Fila 2: gráfica de la semana y más vendidos
         VBox graficaTarjeta = tarjeta("Ventas de los últimos 7 días", crearGrafica(reportes.ventasUltimosDias(7), hoy));
         HBox.setHgrow(graficaTarjeta, Priority.ALWAYS);
@@ -84,7 +132,29 @@ public class DashboardView extends ScrollPane {
         accesos.setMinWidth(340);
         HBox fila3 = new HBox(14, alertas, accesos);
 
-        raiz.getChildren().addAll(metricas, fila2, fila3);
+        raiz.getChildren().add(metricas);
+        if (!metricas2.getChildren().isEmpty()) {
+            raiz.getChildren().add(metricas2);
+        }
+        if (!avisos.getChildren().isEmpty()) {
+            raiz.getChildren().add(avisos);
+        }
+        raiz.getChildren().addAll(fila2, fila3);
+    }
+
+    // Una franja de aviso con un botón que lleva a donde se resuelve.
+    private HBox aviso(String texto, String boton, Modulo destino, Consumer<Modulo> ir) {
+        Label t = new Label("● " + texto);
+        t.getStyleClass().add("texto-aviso");
+        Region espacio = new Region();
+        HBox.setHgrow(espacio, Priority.ALWAYS);
+        Button b = new Button(boton);
+        b.getStyleClass().add("btn-secundario");
+        b.setOnAction(e -> ir.accept(destino));
+        HBox fila = new HBox(12, t, espacio, b);
+        fila.setAlignment(Pos.CENTER_LEFT);
+        fila.getStyleClass().add("card");
+        return fila;
     }
 
     private VBox metrica(String etiqueta, String valor, String nota, boolean alerta) {
@@ -196,7 +266,13 @@ public class DashboardView extends ScrollPane {
             caja.getChildren().add(acceso("Ver productos", Modulo.PRODUCTOS, false, ir));
         }
         if (Permisos.puedeVer(usuario, Modulo.CAJA)) {
-            caja.getChildren().add(acceso("Caja y arqueo", Modulo.CAJA, false, ir));
+            caja.getChildren().add(acceso("Caja del día", Modulo.CAJA, false, ir));
+        }
+        if (Permisos.puedeVer(usuario, Modulo.CLIENTES)) {
+            caja.getChildren().add(acceso("Clientes y créditos", Modulo.CLIENTES, false, ir));
+        }
+        if (Permisos.puedeVer(usuario, Modulo.REPORTES)) {
+            caja.getChildren().add(acceso("Reportes", Modulo.REPORTES, false, ir));
         }
         return caja;
     }

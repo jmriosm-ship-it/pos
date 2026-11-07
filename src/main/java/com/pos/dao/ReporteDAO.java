@@ -121,6 +121,118 @@ public class ReporteDAO {
         return lista;
     }
 
+    // ---- Financiera: lo que paga una financiera cuenta como ingreso el día que PAGA, no el día de la venta.
+
+    // Parte financiada de las ventas hechas en el rango (se resta de los ingresos de esos días).
+    public BigDecimal financieraVendida(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(pv.monto), 0) FROM pagos_venta pv JOIN ventas v ON v.id = pv.id_venta "
+                + "WHERE pv.metodo = 'FINANCIERA' AND v.estado = 'COMPLETADA' AND v.fecha >= ? AND v.fecha < ?", desde, hasta);
+    }
+
+    // El costo de esa parte (proporcional al valor financiado).
+    public BigDecimal financieraCostoVendido(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(pv.monto / v.total * (SELECT SUM(d.costo_unit * d.cantidad) FROM detalle_venta d "
+                + "WHERE d.id_venta = v.id)), 0) FROM pagos_venta pv JOIN ventas v ON v.id = pv.id_venta "
+                + "WHERE pv.metodo = 'FINANCIERA' AND v.estado = 'COMPLETADA' AND v.total > 0 AND v.fecha >= ? AND v.fecha < ?", desde, hasta);
+    }
+
+    // Lo que las financieras pagaron en el rango (ingreso real). Los ajustes no suman.
+    public BigDecimal financieraCobrada(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(cf.valor), 0) FROM cobros_financiera cf JOIN ventas v ON v.id = cf.id_venta "
+                + "WHERE cf.tipo = 'PAGO' AND v.estado = 'COMPLETADA' AND cf.fecha >= ? AND cf.fecha < ?", desde, hasta);
+    }
+
+    // El costo que corresponde a lo cobrado (proporcional: cobrado / total de la venta).
+    public BigDecimal financieraCostoCobrado(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(cf.valor / v.total * (SELECT SUM(d.costo_unit * d.cantidad) FROM detalle_venta d "
+                + "WHERE d.id_venta = v.id)), 0) FROM cobros_financiera cf JOIN ventas v ON v.id = cf.id_venta "
+                + "WHERE cf.tipo = 'PAGO' AND v.estado = 'COMPLETADA' AND v.total > 0 AND cf.fecha >= ? AND cf.fecha < ?", desde, hasta);
+    }
+
+    // Unidades vendidas de cada producto en un rango (ventas completadas): id_producto -> unidades.
+    public Map<Integer, Integer> unidadesVendidas(LocalDate desde, LocalDate hasta) throws SQLException {
+        String sql = "SELECT d.id_producto, SUM(d.cantidad) FROM detalle_venta d JOIN ventas v ON v.id = d.id_venta "
+                + "WHERE v.estado = 'COMPLETADA' AND v.fecha >= ? AND v.fecha < ? GROUP BY d.id_producto";
+        Map<Integer, Integer> mapa = new java.util.HashMap<>();
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = preparar(con, sql, desde, hasta);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                mapa.put(rs.getInt(1), rs.getInt(2));
+            }
+        }
+        return mapa;
+    }
+
+    // Lo que se devolvió a clientes en el periodo (por fecha de la devolución).
+    public BigDecimal devoluciones(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(d.monto), 0) FROM devoluciones d JOIN ventas v ON v.id = d.id_venta "
+                + "WHERE v.estado = 'COMPLETADA' AND d.fecha >= ? AND d.fecha < ?", desde, hasta);
+    }
+
+    // Lo que costaba la mercancía que volvió por devoluciones (se resta del costo vendido).
+    public BigDecimal costoDevuelto(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(di.cantidad * dv.costo_unit), 0) FROM devolucion_items di "
+                + "JOIN devoluciones d ON d.id = di.id_devolucion JOIN ventas v ON v.id = d.id_venta "
+                + "JOIN detalle_venta dv ON dv.id_venta = d.id_venta AND dv.id_producto = di.id_producto "
+                + "WHERE v.estado = 'COMPLETADA' AND d.fecha >= ? AND d.fecha < ?", desde, hasta);
+    }
+
+    // Intereses ganados: de cada pago de un crédito activo, la parte que corresponde a intereses.
+    public BigDecimal interesesCobrados(LocalDate desde, LocalDate hasta) throws SQLException {
+        return suma("SELECT COALESCE(SUM(p.valor * c.intereses / c.total_credito), 0) FROM credito_pagos p "
+                + "JOIN creditos c ON c.id = p.id_credito WHERE c.estado = 'ACTIVO' AND c.total_credito > 0 "
+                + "AND p.fecha >= ? AND p.fecha < ?", desde, hasta);
+    }
+
+    private BigDecimal suma(String sql, LocalDate desde, LocalDate hasta) throws SQLException {
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = preparar(con, sql, desde, hasta);
+             ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getBigDecimal(1);
+        }
+    }
+
+    // Una categoría con lo vendido y lo ganado (antes de descuentos de la venta).
+    public record FilaCategoria(String nombre, BigDecimal ingresos, BigDecimal ganancia) {
+    }
+
+    public List<FilaCategoria> gananciaPorCategoria(LocalDate desde, LocalDate hasta) throws SQLException {
+        String sql = "SELECT COALESCE(c.nombre, 'Sin categoría'), SUM(d.subtotal), SUM(d.subtotal - d.costo_unit * d.cantidad) AS g "
+                + "FROM detalle_venta d JOIN ventas v ON v.id = d.id_venta JOIN productos p ON p.id = d.id_producto "
+                + "LEFT JOIN categorias c ON c.id = p.id_categoria WHERE v.estado = 'COMPLETADA' AND v.fecha >= ? AND v.fecha < ? "
+                + "GROUP BY c.id, c.nombre ORDER BY g DESC";
+        List<FilaCategoria> lista = new ArrayList<>();
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = preparar(con, sql, desde, hasta);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(new FilaCategoria(rs.getString(1), rs.getBigDecimal(2), rs.getBigDecimal(3)));
+            }
+        }
+        return lista;
+    }
+
+    // Total vendido por día, opcionalmente solo de un vendedor (para el calendario).
+    public List<VentaDia> ventasPorDiaDe(LocalDate desde, LocalDate hasta, Integer idUsuario) throws SQLException {
+        String sql = "SELECT DATE(fecha), SUM(total) FROM ventas WHERE estado = 'COMPLETADA' AND fecha >= ? AND fecha < ? "
+                + (idUsuario == null ? "" : "AND id_usuario = ? ") + "GROUP BY DATE(fecha) ORDER BY 1";
+        List<VentaDia> lista = new ArrayList<>();
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = preparar(con, sql, desde, hasta)) {
+            if (idUsuario != null) {
+                ps.setInt(3, idUsuario);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(new VentaDia(rs.getDate(1).toLocalDate(), rs.getBigDecimal(2)));
+                }
+            }
+        }
+        return lista;
+    }
+
     // Cuánta plata hay "parada" en el inventario: stock × costo de cada producto activo.
     public BigDecimal valorInventarioAlCosto() throws SQLException {
         String sql = "SELECT COALESCE(SUM(stock * precio_compra), 0) FROM productos WHERE activo = TRUE";

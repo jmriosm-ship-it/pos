@@ -29,7 +29,7 @@ public class Main extends Application {
         escena = new Scene(new LoginView(this::mostrarPrincipal), 1280, 780);
         escena.getStylesheets().add(Mensajes.CSS);
 
-        ventana.setTitle("POS 2.0");
+        ventana.setTitle(com.pos.ui.Marca.PRODUCTO);
         ventana.setMinWidth(1100);
         ventana.setMinHeight(680);
         ventana.setScene(escena);

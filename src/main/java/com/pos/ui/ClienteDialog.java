@@ -48,7 +48,7 @@ public class ClienteDialog {
 
         ButtonType guardar = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         Dialog<ButtonType> dialogo = new Dialog<>();
-        dialogo.setTitle("POS 2.0");
+        dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText(nuevo ? "Nuevo cliente" : "Editar cliente");
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

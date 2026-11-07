@@ -15,6 +15,16 @@ public class Venta {
     private BigDecimal subtotal = BigDecimal.ZERO;
     private BigDecimal descuento = BigDecimal.ZERO;
     private BigDecimal total = BigDecimal.ZERO;
+    private BigDecimal descuentoPromo = BigDecimal.ZERO;    // lo que rebajan las promociones automáticas
+    private BigDecimal descuentoPuntos = BigDecimal.ZERO;   // lo que se pagó con puntos del cliente
+    private int puntosUsados;
+    private int puntosGanados;
+    private String etiqueta;          // número de recibo por caja, ej: C1-00005
+    private PlanCredito planCredito;  // si parte de la venta se financia en cuotas
+    private String financieraNombre;  // si parte de la venta la paga una financiera
+    private String prefijoCaja = "C1"; // solo para armar la etiqueta al guardar
+    private boolean usarPuntos;       // el cajero eligió pagar con puntos (solo mientras arma la venta)
+    private int puntosDisponibles;    // puntos que tiene el cliente (solo para armar la venta)
     private String metodoPago;
 
     private String estado;
@@ -22,6 +32,7 @@ public class Venta {
     // Solo para mostrar en pantallas e historial (vienen de un JOIN, no son columnas de "ventas").
     private String nombreCliente;
     private String nombreUsuario;
+    private int unidades;        // total de unidades vendidas (solo para el historial)
 
     private List<DetalleVenta> detalles = new ArrayList<>();
 
@@ -40,7 +51,7 @@ public class Venta {
             suma= suma.add(d.getSubtotal());
         }
         subtotal = suma;
-        total = subtotal.subtract(descuento);
+        total = subtotal.subtract(descuentoPromo).subtract(descuento).subtract(descuentoPuntos);
     }
 
     public int getId() {
@@ -107,6 +118,34 @@ public class Venta {
         this.total = total;
     }
 
+    public BigDecimal getDescuentoPromo() { return descuentoPromo; }
+    public void setDescuentoPromo(BigDecimal d) { this.descuentoPromo = d; }
+
+    public BigDecimal getDescuentoPuntos() { return descuentoPuntos; }
+    public void setDescuentoPuntos(BigDecimal d) { this.descuentoPuntos = d; }
+
+    public int getPuntosUsados() { return puntosUsados; }
+    public void setPuntosUsados(int p) { this.puntosUsados = p; }
+
+    public String getFinancieraNombre() { return financieraNombre; }
+    public void setFinancieraNombre(String f) { this.financieraNombre = f; }
+    public PlanCredito getPlanCredito() { return planCredito; }
+    public void setPlanCredito(PlanCredito p) { this.planCredito = p; }
+    public String getEtiqueta() { return etiqueta; }
+    public void setEtiqueta(String e) { this.etiqueta = e; }
+    public String getPrefijoCaja() { return prefijoCaja; }
+    public void setPrefijoCaja(String p) { this.prefijoCaja = p; }
+    // El número que se muestra: C1-00005 (o #id en ventas viejas).
+    public String getNumero() { return etiqueta != null && !etiqueta.isBlank() ? etiqueta : "#" + id; }
+
+    public boolean isUsarPuntos() { return usarPuntos; }
+    public void setUsarPuntos(boolean u) { this.usarPuntos = u; }
+    public int getPuntosDisponibles() { return puntosDisponibles; }
+    public void setPuntosDisponibles(int p) { this.puntosDisponibles = p; }
+
+    public int getPuntosGanados() { return puntosGanados; }
+    public void setPuntosGanados(int p) { this.puntosGanados = p; }
+
     public String getMetodoPago() {
         return metodoPago;
     }
@@ -136,6 +175,9 @@ public class Venta {
 
     public String getNombreCliente() { return nombreCliente; }
     public void setNombreCliente(String nombreCliente) { this.nombreCliente = nombreCliente; }
+
+    public int getUnidades() { return unidades; }
+    public void setUnidades(int unidades) { this.unidades = unidades; }
 
     public String getNombreUsuario() { return nombreUsuario; }
     public void setNombreUsuario(String nombreUsuario) { this.nombreUsuario = nombreUsuario; }

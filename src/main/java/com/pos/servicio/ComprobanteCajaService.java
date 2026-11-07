@@ -46,6 +46,8 @@ public class ComprobanteCajaService {
         fila(sb, "Vendido con tarjeta", ventas.get("TARJETA"), ancho);
         fila(sb, "Vendido con transferencia", ventas.get("TRANSFERENCIA"), ancho);
         fila(sb, "Vendido a fiado (por cobrar)", ventas.get("FIADO"), ancho);
+        fila(sb, "Vendido a crédito (por cobrar)", ventas.get("CREDITO"), ancho);
+        fila(sb, "Vendido por financiera (por cobrar)", ventas.get("FINANCIERA"), ancho);
         if (!abonos.isEmpty()) {
             sb.append(TextoTicket.raya(ancho)).append('\n');
             fila(sb, "Abonos en efectivo", abonos.get("EFECTIVO"), ancho);
@@ -53,6 +55,11 @@ public class ComprobanteCajaService {
             fila(sb, "Abonos con transferencia", abonos.get("TRANSFERENCIA"), ancho);
         }
         sb.append(TextoTicket.raya(ancho)).append('\n');
+
+        com.pos.dao.MovimientoCajaDAO mov = new com.pos.dao.MovimientoCajaDAO();
+        fila(sb, "Ingresos manuales", mov.total(caja.getId(), "INGRESO"), ancho);
+        fila(sb, "Egresos manuales", mov.total(caja.getId(), "EGRESO"), ancho);
+        fila(sb, "Devoluciones en efectivo", mov.devolucionesEfectivo(caja.getId()), ancho);
 
         // El arqueo
         sb.append(TextoTicket.izqDer("ESPERADO EN CAJA", TextoTicket.dinero(caja.getMontoEsperado()), ancho)).append('\n');

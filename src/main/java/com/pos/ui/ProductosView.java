@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Accion;
+import com.pos.modelo.Modulo;
 import com.pos.modelo.Producto;
 import com.pos.servicio.ProductoService;
 import com.pos.util.Dinero;
@@ -111,12 +113,19 @@ public class ProductosView extends VBox {
     }
 
     private void abrirFormulario(Producto producto) {
+        if (!Seguridad.permitido(Modulo.PRODUCTOS, producto == null ? Accion.CREAR : Accion.EDITAR,
+                producto == null ? "crear productos" : "editar productos")) {
+            return;
+        }
         if (ProductoDialog.abrir(producto)) {
             cargar();
         }
     }
 
     private void desactivar(Producto producto) {
+        if (!Seguridad.permitido(Modulo.PRODUCTOS, Accion.BORRAR, "desactivar productos")) {
+            return;
+        }
         if (producto == null) {
             Mensajes.info("Elige un producto", "Selecciona un producto de la tabla primero.");
             return;

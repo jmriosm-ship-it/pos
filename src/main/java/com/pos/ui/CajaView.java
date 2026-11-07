@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Modulo;
+import com.pos.modelo.Accion;
 import com.pos.modelo.Caja;
 import com.pos.modelo.Usuario;
 import com.pos.servicio.CajaService;
@@ -36,6 +38,7 @@ public class CajaView extends VBox {
     private final Runnable alCambiarCaja;
 
     private Caja ultimaCerrada;          // para ver o imprimir su comprobante (F7 / F8)
+    private Caja cajaActual;             // la caja abierta que se está mostrando (para ingresos y egresos)
     private TextField campoContado;      // solo existe mientras hay una caja abierta en pantalla
     private Button botonCerrar;
     private Runnable alTecla12;          // qué hace F12 en el estado actual (cerrar caja, abrir caja...)
@@ -59,6 +62,9 @@ public class CajaView extends VBox {
     }
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         switch (e.getCode()) {
             case F2 -> {
                 if (campoContado != null) {
@@ -66,6 +72,9 @@ public class CajaView extends VBox {
                     campoContado.selectAll();
                 }
             }
+            case F3 -> movimiento("INGRESO");
+            case F4 -> movimiento("EGRESO");
+            case F5 -> movimiento("DEVOLUCION");
             case F12 -> {
                 if (alTecla12 != null) {
                     alTecla12.run();
@@ -88,12 +97,57 @@ public class CajaView extends VBox {
         e.consume();
     }
 
+    // F3 ingreso · F4 egreso · F5 devolución de dinero: solo con la caja abierta.
+    private void movimiento(String tipo) {
+        if ("DEVOLUCION".equals(tipo) ? !Seguridad.permitido(Modulo.CAJA, Accion.BORRAR, "devolver dinero")
+                : !Seguridad.permitido(Modulo.CAJA, Accion.CREAR, "registrar movimientos de caja")) {
+            return;
+        }
+        if (cajaActual != null && MovimientoCajaDialog.abrir(tipo, cajaActual)) {
+            mostrar(null);
+        }
+    }
+
+    // Los últimos ingresos y egresos manuales de esta caja, con tres botones para anotar uno nuevo.
+    private VBox listaMovimientos(Caja caja) {
+        VBox caja1 = new VBox(6);
+        Button ingreso = botonMov("Ingreso", "F3", "INGRESO");
+        Button egreso = botonMov("Egreso", "F4", "EGRESO");
+        Button devolucion = botonMov("Devolver dinero", "F5", "DEVOLUCION");
+        HBox botones = new HBox(8, ingreso, egreso, devolucion);
+        caja1.getChildren().add(botones);
+        try {
+            var lista = cajaService.movimientos(caja);
+            for (int i = 0; i < Math.min(4, lista.size()); i++) {
+                var m = lista.get(i);
+                Label l = new Label((m.tipo().equals("INGRESO") ? "+ " : "- ") + Dinero.formato(m.monto()) + "   " + m.motivo()
+                        + "   (" + m.fecha().format(DateTimeFormatter.ofPattern("HH:mm")) + ")");
+                l.getStyleClass().add(m.tipo().equals("INGRESO") ? "texto-ok" : "texto-suave");
+                caja1.getChildren().add(l);
+            }
+        } catch (SQLException e) {
+            // sin la lista la caja funciona igual
+        }
+        return caja1;
+    }
+
+    private Button botonMov(String texto, String tecla, String tipo) {
+        Button b = new Button(texto);
+        b.getStyleClass().add("btn-secundario");
+        b.setGraphic(Atajos.tecla(tecla));
+        b.setContentDisplay(ContentDisplay.RIGHT);
+        b.setGraphicTextGap(8);
+        b.setFocusTraversable(false);
+        b.setOnAction(e -> movimiento(tipo));
+        return b;
+    }
     // Dibuja la pantalla según el estado de la caja. "recienCerrada" trae el resultado del último arqueo.
     private void mostrar(Caja recienCerrada) {
         getChildren().clear();
         campoContado = null;
         botonCerrar = null;
         alTecla12 = null;
+        cajaActual = null;
         if (recienCerrada != null) {
             ultimaCerrada = recienCerrada;
             getChildren().add(tarjetaResultado(recienCerrada));
@@ -116,6 +170,9 @@ public class CajaView extends VBox {
         abrir.setMaxWidth(Double.MAX_VALUE);
         abrir.setDefaultButton(true);
         abrir.setOnAction(e -> {
+            if (!Seguridad.permitido(Modulo.CAJA, Accion.CREAR, "abrir la caja")) {
+                return;
+            }
             try {
                 cajaService.abrirCaja(usuario, CamposDinero.valor(monto));
                 alCambiarCaja.run();
@@ -142,6 +199,7 @@ public class CajaView extends VBox {
             Mensajes.error("No se pudo calcular la caja.\n" + e.getMessage());
             return new Label();
         }
+        cajaActual = caja;
         BigDecimal esperado = caja.getMontoInicial().add(efectivoRecibido);
 
         // Lo que se contó, y debajo si cuadra, falta o sobra (se actualiza al escribir).
@@ -204,13 +262,15 @@ public class CajaView extends VBox {
         Label sep = new Label();
         sep.getStyleClass().add("separador");
         sep.setMaxWidth(Double.MAX_VALUE);
-        FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F2", "Contar"), Atajos.etiqueta("F12", "Cerrar caja"));
+        FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F2", "Contar"), Atajos.etiqueta("F3", "Ingreso"),
+                Atajos.etiqueta("F4", "Egreso"), Atajos.etiqueta("F5", "Devolver dinero"), Atajos.etiqueta("F12", "Cerrar caja"));
+        VBox movimientos = listaMovimientos(caja);
         return tarjeta("Caja abierta",
                 fila("Abierta desde", caja.getAbiertoEn().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))),
                 fila("Monto inicial", Dinero.formato(caja.getMontoInicial())),
-                fila("Efectivo recibido (ventas y abonos)", Dinero.formato(efectivoRecibido)),
+                fila("Efectivo neto (ventas, abonos, ingresos y egresos)", Dinero.formato(efectivoRecibido)),
                 fila("Esperado en caja", Dinero.formato(esperado)),
-                sep, suave("Cuenta el efectivo que hay en la caja y escríbelo:"), contado, filaEstado, cerrar, teclas);
+                movimientos, sep, suave("Cuenta el efectivo que hay en la caja y escríbelo:"), contado, filaEstado, cerrar, teclas);
     }
 
     private void estado(Label titulo, Label valor, String textoTitulo, String textoValor, String estilo) {
@@ -222,6 +282,9 @@ public class CajaView extends VBox {
 
     // Pregunta con un mensaje claro (cuadra / faltan / sobran) y, si se acepta, cierra y muestra el comprobante.
     private void cerrarCaja(Caja caja, TextField campo, BigDecimal esperado) {
+        if (!Seguridad.permitido(Modulo.CAJA, Accion.CREAR, "cerrar la caja")) {
+            return;
+        }
         try {
             BigDecimal contado = CamposDinero.valor(campo);
             BigDecimal dif = contado.subtract(esperado);

@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Modulo;
+import com.pos.modelo.Accion;
 import com.pos.modelo.Categoria;
 import com.pos.modelo.Producto;
 import com.pos.modelo.Usuario;
@@ -123,6 +125,9 @@ public class CategoriasPanel extends HBox {
 
     // Agrega una categoría escribiendo su nombre y pulsando Enter (o el botón +).
     private void agregarRapido() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.CREAR, "crear categorías")) {
+            return;
+        }
         String nombre = campoNueva.getText();
         if (nombre == null || nombre.isBlank()) {
             return;
@@ -253,12 +258,18 @@ public class CategoriasPanel extends HBox {
     // ---------------------------------------------------------------- acciones
 
     private void renombrar() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.EDITAR, "editar categorías")) {
+            return;
+        }
         if (actual != null && CategoriaDialog.abrir(actual)) {
             cargar(actual.getId());
         }
     }
 
     private void eliminar() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.BORRAR, "borrar categorías")) {
+            return;
+        }
         if (actual == null || !Mensajes.confirmar("Eliminar categoría", "¿Eliminar \"" + actual.getNombre() + "\"?")) {
             return;
         }
@@ -274,6 +285,9 @@ public class CategoriasPanel extends HBox {
 
     // Pregunta a qué categoría pasar el producto seleccionado y lo mueve.
     private void moverProductoElegido() {
+        if (!Seguridad.permitido(Modulo.CATEGORIAS_PROVEEDORES, Accion.EDITAR, "mover productos de categoría")) {
+            return;
+        }
         Producto producto = tabla.getSelectionModel().getSelectedItem();
         if (producto == null || actual == null) {
             return;
@@ -306,7 +320,7 @@ public class CategoriasPanel extends HBox {
 
             ButtonType mover = new ButtonType("Mover", ButtonBar.ButtonData.OK_DONE);
             Dialog<ButtonType> dialogo = new Dialog<>();
-            dialogo.setTitle("POS 2.0");
+            dialogo.setTitle(Marca.PRODUCTO);
             dialogo.setHeaderText("Cambiar de categoría");
             dialogo.getDialogPane().setContent(contenido);
             dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);

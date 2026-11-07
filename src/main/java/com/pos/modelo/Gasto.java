@@ -10,6 +10,7 @@ public class Gasto {
     private int idUsuario;
     private String nombreUsuario;   // solo para mostrar (viene de un JOIN)
     private String concepto;
+    private String categoria = "Otros";
     private BigDecimal monto;
     private LocalDateTime fecha;
 
@@ -24,6 +25,9 @@ public class Gasto {
 
     public String getNombreUsuario() { return nombreUsuario; }
     public void setNombreUsuario(String nombreUsuario) { this.nombreUsuario = nombreUsuario; }
+
+    public String getCategoria() { return categoria; }
+    public void setCategoria(String categoria) { this.categoria = categoria; }
 
     public String getConcepto() { return concepto; }
     public void setConcepto(String concepto) { this.concepto = concepto; }

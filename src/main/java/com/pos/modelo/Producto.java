@@ -24,6 +24,12 @@ public class Producto {
     private int stock;
     private int stockMinimo;
     private boolean activo;
+    private String marca;
+    private String condicion = "Nuevo";   // Nuevo, Open box o Usado
+    private int garantiaDias;
+    private boolean porImei;              // true = cada unidad tiene su IMEI/serial y el stock sale de ahí
+    private String capacidad;
+    private String color;
 
     // Constructor vacío: lo usa el DAO para crear el objeto y llenarlo con los setters.
     public Producto() {
@@ -65,6 +71,24 @@ public class Producto {
 
     public boolean isActivo() { return activo; }
     public void setActivo(boolean activo) { this.activo = activo; }
+
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+
+    public String getCondicion() { return condicion; }
+    public void setCondicion(String condicion) { this.condicion = condicion; }
+
+    public int getGarantiaDias() { return garantiaDias; }
+    public void setGarantiaDias(int garantiaDias) { this.garantiaDias = garantiaDias; }
+
+    public boolean isPorImei() { return porImei; }
+    public void setPorImei(boolean porImei) { this.porImei = porImei; }
+
+    public String getCapacidad() { return capacidad; }
+    public void setCapacidad(String capacidad) { this.capacidad = capacidad; }
+
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
 
     // toString: cómo se muestra el objeto cuando lo imprimes o está en una lista.
     @Override

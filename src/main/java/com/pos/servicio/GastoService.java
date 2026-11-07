@@ -11,10 +11,18 @@ import java.util.List;
 
 public class GastoService {
 
+    // Categorías de gastos del local.
+    public static final java.util.List<String> CATEGORIAS = java.util.List.of("Arriendo", "Servicios", "Nómina",
+            "Publicidad", "Bolsas y empaques", "Transporte", "Devoluciones", "Otros");
+
     private final GastoDAO gastoDAO = new GastoDAO();
 
     // Registra un gasto (arriendo, servicios, etc.).
     public Gasto registrar(Usuario usuario, String concepto, BigDecimal monto) throws SQLException {
+        return registrar(usuario, "Otros", concepto, monto);
+    }
+
+    public Gasto registrar(Usuario usuario, String categoria, String concepto, BigDecimal monto) throws SQLException {
         if (concepto == null || concepto.isBlank()) {
             throw new IllegalArgumentException("Debes escribir el concepto del gasto.");
         }
@@ -25,8 +33,10 @@ public class GastoService {
         Gasto g = new Gasto();
         g.setIdUsuario(usuario.getId());
         g.setConcepto(concepto.trim());
+        g.setCategoria(categoria == null || categoria.isBlank() ? "Otros" : categoria);
         g.setMonto(monto);
         gastoDAO.insertar(g);
+        AuditoriaService.registrar(usuario, "Gasto registrado", g.getCategoria() + " · " + g.getConcepto() + " · " + monto.toPlainString());
         return g;
     }
 
@@ -40,5 +50,6 @@ public class GastoService {
             throw new IllegalStateException("Solo un administrador puede eliminar gastos.");
         }
         gastoDAO.eliminar(g.getId());
+        AuditoriaService.registrar(usuario, "Gasto eliminado", g.getConcepto() + " · " + g.getMonto().toPlainString());
     }
 }

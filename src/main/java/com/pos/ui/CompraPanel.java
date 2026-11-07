@@ -1,5 +1,7 @@
 package com.pos.ui;
 
+import com.pos.modelo.Modulo;
+import com.pos.modelo.Accion;
 import com.pos.dao.ProductoDAO;
 import com.pos.modelo.Compra;
 import com.pos.modelo.Producto;
@@ -420,6 +422,9 @@ public class CompraPanel extends VBox {
     // ---------------------------------------------------------------- confirmar
 
     private void confirmar() {
+        if (!Seguridad.permitido(Modulo.INVENTARIO, Accion.CREAR, "registrar compras")) {
+            return;
+        }
         if (comboProveedor.getValue() == null) {
             Mensajes.error("Elige el proveedor (F3) antes de confirmar la compra.");
             return;
@@ -474,6 +479,9 @@ public class CompraPanel extends VBox {
     // ---------------------------------------------------------------- teclas
 
     private void tecla(KeyEvent e) {
+        if (!Atajos.visible(this)) {
+            return;
+        }
         switch (e.getCode()) {
             case F2 -> {
                 buscador.requestFocus();

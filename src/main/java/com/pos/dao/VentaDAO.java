@@ -20,10 +20,11 @@ public class VentaDAO {
     // Guarda la venta completa dentro de UNA transacción.
     // Transacción = grupo de operaciones que se aplican todas juntas o ninguna.
     public void guardar(Venta v) throws SQLException {
-        String sqlVenta = "INSERT INTO ventas (id_caja, id_usuario, id_cliente, subtotal, descuento, total, metodo_pago) "
+        String sqlVenta = "INSERT INTO ventas (id_caja, id_usuario, id_cliente, subtotal, descuento, total, metodo_pago, "
+                + "descuento_promo, descuento_puntos, puntos_usados, puntos_ganados, financiera_nombre) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlDetalle = "INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unit, costo_unit, subtotal, precio_original) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?)";
-        String sqlDetalle = "INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unit, costo_unit, subtotal) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
         // "stock >= ?" evita que el stock quede negativo aunque dos cajeros vendan a la vez.
         String sqlStock = "UPDATE productos SET stock = stock - ? WHERE id = ? AND stock >= ?";
         String sqlMovimiento = "INSERT INTO movimientos_inventario (id_producto, id_usuario, tipo, cantidad, motivo) "
@@ -43,12 +44,24 @@ public class VentaDAO {
                 ps.setBigDecimal(5, v.getDescuento());
                 ps.setBigDecimal(6, v.getTotal());
                 ps.setString(7, v.getMetodoPago());
+                ps.setBigDecimal(8, v.getDescuentoPromo());
+                ps.setBigDecimal(9, v.getDescuentoPuntos());
+                ps.setInt(10, v.getPuntosUsados());
+                ps.setInt(11, v.getPuntosGanados());
+                ps.setString(12, v.getFinancieraNombre());
                 ps.executeUpdate();
 
                 try (ResultSet keys = ps.getGeneratedKeys()) {
                     keys.next();
                     v.setId(keys.getInt(1));
                 }
+            }
+            // Número de recibo por caja: prefijo + id con ceros (C1-00005).
+            v.setEtiqueta(v.getPrefijoCaja() + "-" + String.format("%05d", v.getId()));
+            try (PreparedStatement ps = con.prepareStatement("UPDATE ventas SET etiqueta = ? WHERE id = ?")) {
+                ps.setString(1, v.getEtiqueta());
+                ps.setInt(2, v.getId());
+                ps.executeUpdate();
             }
 
             // 2) Cada línea del carrito
@@ -61,6 +74,7 @@ public class VentaDAO {
                     ps.setBigDecimal(4, d.getPrecioUnit());
                     ps.setBigDecimal(5, d.getCostoUnit());
                     ps.setBigDecimal(6, d.getSubtotal());
+                    ps.setBigDecimal(7, d.getPrecioOriginal());
                     ps.executeUpdate();
                 }
 
@@ -111,6 +125,16 @@ public class VentaDAO {
                 }
             }
 
+            // 7) Si parte de la venta se financia en cuotas, se crea el crédito con su plan de pagos.
+            if (v.getPlanCredito() != null) {
+                String descripcion = v.getDetalles().stream().map(d -> d.getCantidad() + " x " + d.getNombreProducto())
+                        .collect(java.util.stream.Collectors.joining(", "));
+                if (descripcion.length() > 190) {
+                    descripcion = descripcion.substring(0, 187) + "...";
+                }
+                new CreditoDAO().guardar(con, v, v.getPlanCredito(), v.getTotal().subtract(v.getPlanCredito().financiado()), descripcion);
+            }
+
             // Todo salió bien: ahora sí se guarda todo de golpe.
             con.commit();
 
@@ -136,6 +160,27 @@ public class VentaDAO {
             ps.setTimestamp(1, Timestamp.valueOf(desde.atStartOfDay()));
             ps.setTimestamp(2, Timestamp.valueOf(hasta.plusDays(1).atStartOfDay()));
 
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(mapear(rs));
+                }
+            }
+        }
+        return lista;
+    }
+
+    // Los recibos más recientes que coinciden con el texto: número, cliente, vendedor o producto.
+    public List<Venta> buscarRecibos(String texto, int limite) throws SQLException {
+        String sql = consultaBase() + " WHERE (v.etiqueta LIKE ? OR CAST(v.id AS CHAR) LIKE ? OR c.nombre LIKE ? OR u.nombre LIKE ? "
+                + "OR EXISTS (SELECT 1 FROM detalle_venta d JOIN productos p ON p.id = d.id_producto "
+                + "WHERE d.id_venta = v.id AND p.nombre LIKE ?)) ORDER BY v.id DESC LIMIT ?";
+        String patron = "%" + (texto == null ? "" : texto.trim()) + "%";
+        List<Venta> lista = new ArrayList<>();
+        try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {
+            for (int i = 1; i <= 5; i++) {
+                ps.setString(i, patron);
+            }
+            ps.setInt(6, limite);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     lista.add(mapear(rs));
@@ -254,11 +299,15 @@ public class VentaDAO {
                 ps.setInt(1, idVenta);
                 ps.executeUpdate();
             }
+            new CreditoDAO().cancelarDeVenta(con, idVenta);   // si la venta era a crédito, el crédito se cancela
 
             // Primero se leen las líneas completas, y luego se devuelve el stock de cada una.
             List<int[]> lineas = new ArrayList<>();   // cada int[] = {id_producto, cantidad}
             try (PreparedStatement ps = con.prepareStatement(
-                    "SELECT id_producto, cantidad FROM detalle_venta WHERE id_venta = ?")) {
+                    // Solo vuelve al inventario lo que no se había devuelto antes en devoluciones parciales.
+                    "SELECT dv.id_producto, dv.cantidad - COALESCE((SELECT SUM(di.cantidad) FROM devolucion_items di "
+                            + "JOIN devoluciones d ON d.id = di.id_devolucion WHERE d.id_venta = dv.id_venta "
+                            + "AND di.id_producto = dv.id_producto), 0) FROM detalle_venta dv WHERE dv.id_venta = ?")) {
                 ps.setInt(1, idVenta);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
@@ -295,9 +344,23 @@ public class VentaDAO {
         }
     }
 
+    // Puntos de un cliente = los que ganó menos los que usó, solo en ventas no anuladas.
+    public int puntosDeCliente(int idCliente) throws SQLException {
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = con.prepareStatement("SELECT COALESCE(SUM(puntos_ganados - puntos_usados), 0) "
+                     + "FROM ventas WHERE id_cliente = ? AND estado = 'COMPLETADA'")) {
+            ps.setInt(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
     // SELECT común: une con clientes (LEFT JOIN: la venta puede no tener cliente) y con usuarios.
     private String consultaBase() {
-        return "SELECT v.*, c.nombre AS cliente, u.nombre AS vendedor FROM ventas v "
+        return "SELECT v.*, c.nombre AS cliente, u.nombre AS vendedor, "
+                + "(SELECT COALESCE(SUM(dv.cantidad), 0) FROM detalle_venta dv WHERE dv.id_venta = v.id) AS unidades FROM ventas v "
                 + "LEFT JOIN clientes c ON v.id_cliente = c.id "
                 + "JOIN usuarios u ON v.id_usuario = u.id";
     }
@@ -314,10 +377,17 @@ public class VentaDAO {
         v.setDescuento(rs.getBigDecimal("descuento"));
         v.setTotal(rs.getBigDecimal("total"));
         v.setMetodoPago(rs.getString("metodo_pago"));
+        v.setDescuentoPromo(rs.getBigDecimal("descuento_promo"));
+        v.setDescuentoPuntos(rs.getBigDecimal("descuento_puntos"));
+        v.setPuntosUsados(rs.getInt("puntos_usados"));
+        v.setPuntosGanados(rs.getInt("puntos_ganados"));
+        v.setEtiqueta(rs.getString("etiqueta"));
+        v.setFinancieraNombre(rs.getString("financiera_nombre"));
         v.setEstado(rs.getString("estado"));
         String cliente = rs.getString("cliente");
         v.setNombreCliente(cliente != null ? cliente : "Cliente general");
         v.setNombreUsuario(rs.getString("vendedor"));
+        v.setUnidades(rs.getInt("unidades"));
         return v;
     }
 }
