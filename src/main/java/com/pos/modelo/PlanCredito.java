@@ -9,10 +9,11 @@ import java.util.List;
  * frecuencia: MENSUAL o QUINCENAL (cada 15 días). La tasa se anota como % mensual; en quincenal cada cuota cobra la mitad.
  */
 public record PlanCredito(String frecuencia, int plazo, BigDecimal tasa, LocalDate primeraCuota, BigDecimal financiado,
-                          BigDecimal cuotaValor, BigDecimal totalCredito, BigDecimal intereses, List<Cuota> cuotas) {
+                          BigDecimal cuotaValor, BigDecimal totalCredito, BigDecimal intereses, List<Cuota> cuotas)
+        implements java.io.Serializable {
 
     // Una cuota: número, fecha de vencimiento y valor.
-    public record Cuota(int n, LocalDate vence, BigDecimal valor) {
+    public record Cuota(int n, LocalDate vence, BigDecimal valor) implements java.io.Serializable {
     }
 
     public String frecuenciaTexto() {

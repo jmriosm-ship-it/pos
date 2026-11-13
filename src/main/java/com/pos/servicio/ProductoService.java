@@ -18,6 +18,15 @@ public class ProductoService {
         return dao.buscar(texto.trim());
     }
 
+    // Para el buscador de la pantalla de ventas (suena en cada letra que se escribe): si la copia local es reciente se busca
+    // en memoria, al instante, sin viajar a internet. La venta en sí siempre confirma con la base de datos.
+    public List<Producto> buscarRapido(String texto) throws SQLException {
+        if (texto != null && !texto.isBlank() && com.pos.config.Conectividad.enLinea() && com.pos.offline.CacheLocal.fresco(45_000)) {
+            return com.pos.offline.CacheLocal.buscarProductos(texto.trim(), 50);
+        }
+        return buscar(texto);
+    }
+
     // Crea o actualiza un producto, validando antes los datos.
     public void guardar(Producto p) throws SQLException {
         if (p.getCodigo() == null || p.getCodigo().isBlank()) {
@@ -50,9 +59,10 @@ public class ProductoService {
             } else {
                 dao.actualizar(p);
             }
+            com.pos.offline.Sincronizador.pedirRefresco();
         } catch (SQLException e) {
             // Un producto desactivado sigue ocupando su código en la base de datos.
-            if (e.getMessage() != null && e.getMessage().contains("Duplicate")) {
+            if ("23505".equals(e.getSQLState())) {
                 throw new IllegalArgumentException("Ese código ya está en uso (puede ser de un producto desactivado).");
             }
             throw e;

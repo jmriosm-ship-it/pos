@@ -5,7 +5,9 @@ package com.pos.modelo;
  * Guardamos el HASH de la clave, nunca la clave en texto: si alguien ve la
  * base de datos, no puede leer las contraseñas.
  */
-public class Usuario {
+public class Usuario implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
 
     private int id;
     private String nombre;     // nombre real: "Juan Pérez"

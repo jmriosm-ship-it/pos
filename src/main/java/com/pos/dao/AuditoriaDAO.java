@@ -33,7 +33,7 @@ public class AuditoriaDAO {
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement("SELECT a.fecha, COALESCE(u.nombre, 'Sistema') AS usuario, a.accion, a.detalle "
                      + "FROM auditoria a LEFT JOIN usuarios u ON u.id = a.id_usuario "
-                     + "WHERE a.accion LIKE ? OR a.detalle LIKE ? OR u.nombre LIKE ? ORDER BY a.id DESC LIMIT ?")) {
+                     + "WHERE a.accion ILIKE ? OR a.detalle ILIKE ? OR u.nombre ILIKE ? ORDER BY a.id DESC LIMIT ?")) {
             ps.setString(1, patron);
             ps.setString(2, patron);
             ps.setString(3, patron);

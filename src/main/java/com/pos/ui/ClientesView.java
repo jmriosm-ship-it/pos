@@ -13,18 +13,18 @@ import javafx.scene.layout.VBox;
 public class ClientesView extends VBox {
 
     private final TabPane pestanas = new TabPane();
-    private final CreditosPanel creditos = new CreditosPanel();
-    private final FinancieraPanel financiera = new FinancieraPanel();
+    private final Perezosa<CreditosPanel> creditos = new Perezosa<>(CreditosPanel::new);
+    private final Perezosa<FinancieraPanel> financiera = new Perezosa<>(FinancieraPanel::new);
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
 
     public ClientesView() {
         Tab pClientes = pestana("Clientes", "Alt+1", new ClientesPanel());
-        Tab pCreditos = pestana("Créditos en cuotas", "Alt+2", creditos);
-        Tab pFinanciera = pestana("Financiera", "Alt+3", financiera);
+        Tab pCreditos = pestana("Créditos en cuotas", "Alt+2", null);
+        Tab pFinanciera = pestana("Financiera", "Alt+3", null);
         pestanas.getTabs().addAll(pClientes, pCreditos, pFinanciera);
-        pFinanciera.setOnSelectionChanged(e -> { if (pFinanciera.isSelected()) financiera.recargar(); });
+        financiera.enPestana(pFinanciera, FinancieraPanel::recargar);
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        pCreditos.setOnSelectionChanged(e -> { if (pCreditos.isSelected()) creditos.recargar(); });
+        creditos.enPestana(pCreditos, CreditosPanel::recargar);
         VBox.setVgrow(pestanas, Priority.ALWAYS);
         getChildren().add(pestanas);
 

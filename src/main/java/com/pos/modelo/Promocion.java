@@ -9,7 +9,9 @@ import java.time.LocalDate;
  *  - NXM: "lleva N, paga M" (ej: lleva 2 paga 1 = 2x1).
  * Alcance: toda la tienda, una categoría o un producto. Si varias aplican a una línea, gana la que más rebaja.
  */
-public class Promocion {
+public class Promocion implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
 
     private int id;
     private String nombre;

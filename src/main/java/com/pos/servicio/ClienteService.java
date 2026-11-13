@@ -40,8 +40,8 @@ public class ClienteService {
                 clienteDAO.actualizar(c);
             }
         } catch (SQLException e) {
-            // El documento es UNIQUE en la base de datos: si ya existe, MySQL avisa con "Duplicate entry".
-            if (e.getMessage() != null && e.getMessage().contains("Duplicate")) {
+            // El documento es UNIQUE en la base de datos: si ya existe, PostgreSQL avisa con el código 23505.
+            if ("23505".equals(e.getSQLState())) {
                 throw new IllegalArgumentException("Ya existe un cliente con ese documento.");
             }
             throw e;

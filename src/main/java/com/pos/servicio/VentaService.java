@@ -45,7 +45,7 @@ public class VentaService {
         if (cantidad <= 0) {
             throw new IllegalArgumentException("La cantidad debe ser mayor a cero.");
         }
-        Producto p = productoDAO.buscarPorCodigo(codigo);
+        Producto p = productoDAO.buscarPorCodigoRapido(codigo);
         if (p == null) {
             throw new IllegalArgumentException("No existe un producto con el código " + codigo);
         }
@@ -70,6 +70,7 @@ public class VentaService {
         d.setPrecioUnit(p.getPrecioVenta());   // se "congela" el precio de este momento
         d.setPrecioOriginal(p.getPrecioVenta());
         d.setCostoUnit(p.getPrecioCompra());   // y el costo, para calcular la ganancia después
+        d.setIdCategoria(p.getIdCategoria());   // así las promociones no tienen que volver a consultarla
         v.getDetalles().add(d);
         recalcular(v);
     }
@@ -126,6 +127,11 @@ public class VentaService {
                     + " y el total es " + v.getTotal().toPlainString() + ".");
         }
 
+        // Sin conexión solo se vende con efectivo, tarjeta o transferencia: lo demás toca la cuenta del cliente.
+        if (!com.pos.config.Conectividad.enLinea() && necesitaConexion(pagos)) {
+            throw new IllegalStateException(MENSAJE_SIN_CONEXION);
+        }
+
         // Para fiar hay que saber a quién: el "cliente general" no puede quedar debiendo.
         boolean hayFiado = pagos.stream().anyMatch(p -> "FIADO".equals(p.metodo()));
         if (hayFiado && v.getIdCliente() == null) {
@@ -168,7 +174,7 @@ public class VentaService {
         v.setMetodoPago(pagos.size() == 1 ? pagos.get(0).metodo() : "MIXTO");
         // La rebaja (precios bajados + descuento) no puede pasar del límite de quien vende.
         try {
-            new com.pos.dao.UsuarioDAO().listar().stream().filter(u -> u.getId() == v.getIdUsuario()).findFirst()
+            usuariosRapido().stream().filter(u -> u.getId() == v.getIdUsuario()).findFirst()
                     .ifPresent(u -> validarRebaja(v, u));
         } catch (SQLException e) {
             throw new IllegalStateException("No se pudo revisar el límite de rebaja: " + e.getMessage());
@@ -181,8 +187,52 @@ public class VentaService {
                     .multiply(puntosPorMil()).setScale(0, java.math.RoundingMode.DOWN).intValue();
         }
         v.setPuntosGanados(ganados);
-        ventaDAO.guardar(v);     // la transacción: venta + líneas + stock + movimientos + pagos
+        try {
+            ventaDAO.guardar(v);     // la transacción: venta + líneas + stock + movimientos + pagos
+            com.pos.offline.Sincronizador.pedirRefresco();   // el stock cambió: la copia local se renueva
+        } catch (SQLException e) {
+            if (!com.pos.config.Conectividad.esCaida(e)) {
+                throw e;
+            }
+            guardarSinConexion(v, pagos);   // se fue el internet: la venta queda guardada en este PC
+        }
         v.setEstado("COMPLETADA");
+    }
+
+    // Los usuarios desde la copia local si es reciente (evita un viaje a internet en cada cobro).
+    private List<Usuario> usuariosRapido() throws SQLException {
+        if (com.pos.config.Conectividad.enLinea() && com.pos.offline.CacheLocal.fresco(45_000)) {
+            return com.pos.offline.CacheLocal.usuarios();
+        }
+        return new com.pos.dao.UsuarioDAO().listar();
+    }
+
+    private static final String MENSAJE_SIN_CONEXION = "Sin conexión a internet: por ahora solo se puede cobrar en efectivo, "
+            + "tarjeta o transferencia. Fiado, crédito y financiera necesitan conexión.";
+
+    private boolean necesitaConexion(List<Pago> pagos) {
+        return pagos.stream().anyMatch(p -> List.of("FIADO", "CREDITO", "FINANCIERA").contains(p.metodo()));
+    }
+
+    // La venta no se pudo subir por falta de conexión: se guarda completa en el PC (cola de pendientes) y se sube sola
+    // cuando vuelva el internet. Mientras tanto se descuenta del stock de la copia local.
+    private void guardarSinConexion(Venta v, List<Pago> pagos) {
+        if (necesitaConexion(pagos)) {
+            throw new IllegalStateException(MENSAJE_SIN_CONEXION);
+        }
+        v.setFecha(java.time.LocalDateTime.now());
+        try {
+            new com.pos.dao.UsuarioDAO().listar().stream().filter(u -> u.getId() == v.getIdUsuario()).findFirst()
+                    .ifPresent(u -> v.setNombreUsuario(u.getNombre()));
+        } catch (SQLException e) {
+            // el nombre del vendedor es solo para el recibo
+        }
+        try {
+            com.pos.offline.ColaVentas.guardar(v);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("No hay internet y tampoco se pudo guardar la venta en este PC: " + e.getMessage());
+        }
+        com.pos.offline.CacheLocal.descontarStock(v);
     }
 
     // Baja el precio de una línea al cobrar. Nunca se puede subir sobre el precio normal, y el total de rebajas
@@ -244,7 +294,7 @@ public class VentaService {
         }
         for (DetalleVenta d : v.getDetalles()) {
             if (d.getIdProducto() == idProducto) {
-                Producto p = productoDAO.buscarPorId(idProducto);
+                Producto p = productoDAO.buscarPorIdRapido(idProducto);
                 validarStock(p, nuevaCantidad);
                 d.setCantidad(nuevaCantidad);
                 recalcular(v);

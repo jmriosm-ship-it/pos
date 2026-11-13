@@ -65,6 +65,7 @@ public class ClientesPanel extends HBox {
     private final TableView<Abono> tablaAbonos = new TableView<>();
     private final Button editar = new Button("Editar");
     private final Button abonar = new Button("Registrar abono");
+    private final Button recordar = new Button("Recordar por WhatsApp");
 
     private Cliente actual;
 
@@ -101,6 +102,7 @@ public class ClientesPanel extends HBox {
             case F3 -> nuevoCliente();
             case F4 -> editar();
             case F5 -> registrarAbono();
+            case F6 -> recordarWhatsApp();
             default -> {
                 return;
             }
@@ -122,7 +124,7 @@ public class ClientesPanel extends HBox {
         HBox fila = new HBox(6, buscador, nuevo);
 
         FlowPane teclas = new FlowPane(12, 4,
-                Atajos.etiqueta("F3", "Nuevo"), Atajos.etiqueta("F4", "Editar"), Atajos.etiqueta("F5", "Abono"));
+                Atajos.etiqueta("F3", "Nuevo"), Atajos.etiqueta("F4", "Editar"), Atajos.etiqueta("F5", "Abono"), Atajos.etiqueta("F6", "WhatsApp"));
 
         // Se reutiliza el estilo de la lista de categorías.
         lista.getStyleClass().add("lista-categorias");
@@ -175,9 +177,12 @@ public class ClientesPanel extends HBox {
         abonar.getStyleClass().add("btn-primario");
         conTecla(abonar, "F5");
         abonar.setOnAction(e -> registrarAbono());
+        recordar.getStyleClass().add("btn-secundario");
+        conTecla(recordar, "F6");
+        recordar.setOnAction(e -> recordarWhatsApp());
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox cabecera = new HBox(8, titulo, espacio, editar, abonar);
+        HBox cabecera = new HBox(8, titulo, espacio, editar, recordar, abonar);
         cabecera.setAlignment(Pos.CENTER_LEFT);
 
         contacto.getStyleClass().add("texto-suave");
@@ -300,6 +305,7 @@ public class ClientesPanel extends HBox {
         actual = c;
         editar.setDisable(c == null);
         abonar.setDisable(c == null || c.getSaldoPendiente().signum() <= 0);
+        recordar.setDisable(c == null || c.getSaldoPendiente().signum() <= 0);
         lblDebe.getStyleClass().remove("texto-peligro");
         if (c == null) {
             titulo.setText("Sin clientes");
@@ -367,6 +373,25 @@ public class ClientesPanel extends HBox {
         Cliente editado = ClienteDialog.abrir(actual);
         if (editado != null) {
             cargar(editado.getId());
+        }
+    }
+
+    // Abre WhatsApp con un mensaje listo para recordarle al cliente lo que debe (el envío lo confirmas tú en WhatsApp).
+    private void recordarWhatsApp() {
+        if (actual == null || actual.getSaldoPendiente().signum() <= 0) {
+            return;
+        }
+        if (actual.getTelefono() == null || actual.getTelefono().isBlank()) {
+            Mensajes.info("Falta el teléfono", "Este cliente no tiene teléfono. Agrégalo con Editar (F4).");
+            return;
+        }
+        try {
+            String negocio = new com.pos.servicio.ConfiguracionService().nombreNegocio();
+            String texto = "Hola " + actual.getNombre() + ", te escribimos de " + negocio + ". Tienes un saldo pendiente de "
+                    + Dinero.formato(actual.getSaldoPendiente()) + ". Cuando puedas, pásate o escríbenos para ponerte al día. ¡Gracias!";
+            java.awt.Desktop.getDesktop().browse(java.net.URI.create(com.pos.servicio.CreditoService.urlWhatsApp(actual.getTelefono(), texto)));
+        } catch (Exception e) {
+            Mensajes.error("No se pudo abrir WhatsApp.\n" + e.getMessage());
         }
     }
 

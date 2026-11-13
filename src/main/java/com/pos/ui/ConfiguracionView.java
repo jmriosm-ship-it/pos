@@ -22,9 +22,14 @@ public class ConfiguracionView extends VBox {
     public ConfiguracionView() {
         ScrollPane negocio = new ScrollPane(new NegocioPanel());
         negocio.setFitToWidth(true);
-        pestanas.getTabs().addAll(pestana("Negocio", "Alt+1", negocio), pestana("Promociones", "Alt+2", new PromocionesPanel()),
-                pestana("Crédito", "Alt+3", conScroll(new CreditoConfigPanel())),
-                pestana("Registro", "Alt+4", new RegistroPanel()));
+        Tab pPromos = pestana("Promociones", "Alt+2", null);
+        Tab pCredito = pestana("Crédito", "Alt+3", null);
+        Tab pRegistro = pestana("Registro", "Alt+4", null);
+        pestanas.getTabs().addAll(pestana("Negocio", "Alt+1", negocio), pPromos, pCredito, pRegistro);
+        // Solo Negocio se arma al abrir; las demás pestañas, la primera vez que se abren.
+        new Perezosa<Node>(PromocionesPanel::new).enPestana(pPromos, null);
+        new Perezosa<Node>(() -> conScroll(new CreditoConfigPanel())).enPestana(pCredito, null);
+        new Perezosa<Node>(RegistroPanel::new).enPestana(pRegistro, null);
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         VBox.setVgrow(pestanas, Priority.ALWAYS);
         getChildren().add(pestanas);

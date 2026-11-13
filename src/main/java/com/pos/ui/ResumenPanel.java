@@ -6,6 +6,7 @@ import com.pos.modelo.VentaDia;
 import com.pos.servicio.GastoService;
 import com.pos.servicio.ReporteService;
 import com.pos.util.Dinero;
+import com.pos.util.Paralelo;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -67,8 +68,15 @@ public class ResumenPanel extends ScrollPane {
         try {
             LocalDate desde = periodo.desde();
             LocalDate hasta = periodo.hasta();
-            ResumenFinanciero r = reportes.resumen(desde, hasta);
-            int numeroGastos = gastos.listar(desde, hasta).size();
+            // Todas las lecturas se piden al mismo tiempo (la base está en internet y cada una tarda).
+            var fResumen = Paralelo.lanzarGrupo(() -> reportes.resumen(desde, hasta));
+            var fGastos = Paralelo.lanzarGrupo(() -> gastos.listar(desde, hasta).size());
+            var fDia = Paralelo.lanzarGrupo(() -> reportes.ventasPorDia(desde, hasta));
+            var fPagos = Paralelo.lanzarGrupo(() -> reportes.ventasPorMetodoPago(desde, hasta));
+            var fTop = Paralelo.lanzarGrupo(() -> reportes.masVendidos(desde, hasta, 5));
+            var fCategorias = Paralelo.lanzarGrupo(() -> reportes.gananciaPorCategoria(desde, hasta));
+            ResumenFinanciero r = Paralelo.esperar(fResumen);
+            int numeroGastos = Paralelo.esperar(fGastos);
 
             // Fila 1: las cuatro tarjetas
             BigDecimal margen = r.ingresos().signum() == 0 ? BigDecimal.ZERO
@@ -82,20 +90,20 @@ public class ResumenPanel extends ScrollPane {
                             r.gananciaNeta().signum() >= 0 ? "texto-ok" : "texto-peligro"));
 
             // Fila 2: ventas por día y cómo pagaron
-            VBox grafica = caja("Ventas por día", crearGrafica(reportes.ventasPorDia(desde, hasta), desde, hasta));
+            VBox grafica = caja("Ventas por día", crearGrafica(Paralelo.esperar(fDia), desde, hasta));
             HBox.setHgrow(grafica, Priority.ALWAYS);
             grafica.setMinWidth(0);   // la gráfica se encoge antes de empujar la tarjeta de pagos fuera de la pantalla
             grafica.setPrefWidth(10);
-            VBox pagos = caja("Cómo pagaron", crearPagos(reportes.ventasPorMetodoPago(desde, hasta)));
+            VBox pagos = caja("Cómo pagaron", crearPagos(Paralelo.esperar(fPagos)));
             pagos.setPrefWidth(340);
             pagos.setMinWidth(340);
             HBox fila2 = new HBox(10, grafica, pagos);
 
             // Fila 3: más vendidos
-            VBox top = caja("Más vendidos", crearTop(reportes.masVendidos(desde, hasta, 5)));
+            VBox top = caja("Más vendidos", crearTop(Paralelo.esperar(fTop)));
 
             // Fila 4: ganancia por categoría y ventas por vendedor
-            VBox porCategoria = caja("Ganancia por categoría", listaCategorias(reportes.gananciaPorCategoria(desde, hasta)));
+            VBox porCategoria = caja("Ganancia por categoría", listaCategorias(Paralelo.esperar(fCategorias)));
             VBox porVendedor = caja("Ventas por vendedor (menos devoluciones)", listaVendedores(desde, hasta));
             HBox.setHgrow(porCategoria, Priority.ALWAYS);
             HBox.setHgrow(porVendedor, Priority.ALWAYS);
@@ -263,8 +271,15 @@ public class ResumenPanel extends ScrollPane {
         VBox caja = new VBox(2);
         com.pos.servicio.NominaService nomina = new com.pos.servicio.NominaService();
         boolean alguno = false;
-        for (com.pos.modelo.Usuario u : new com.pos.servicio.UsuarioService().listar()) {
-            BigDecimal[] v = nomina.ventas(u, desde, hasta);
+        // Lo que vendió cada trabajador se pide a la vez (antes, uno tras otro).
+        java.util.List<com.pos.modelo.Usuario> trabajadores = new com.pos.servicio.UsuarioService().listar();
+        java.util.List<java.util.concurrent.Future<BigDecimal[]>> ventasDe = new java.util.ArrayList<>();
+        for (com.pos.modelo.Usuario u : trabajadores) {
+            ventasDe.add(Paralelo.lanzarGrupo(() -> nomina.ventas(u, desde, hasta)));
+        }
+        for (int i = 0; i < trabajadores.size(); i++) {
+            com.pos.modelo.Usuario u = trabajadores.get(i);
+            BigDecimal[] v = Paralelo.esperar(ventasDe.get(i));
             if (v[0].signum() == 0) {
                 continue;
             }

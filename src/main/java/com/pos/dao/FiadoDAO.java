@@ -127,7 +127,7 @@ public class FiadoDAO {
                 }
                 // Baja el saldo; si queda en cero el fiado pasa a PAGADO.
                 try (PreparedStatement ps = con.prepareStatement(
-                        "UPDATE fiados SET saldo = saldo - ?, estado = IF(saldo - ? <= 0, 'PAGADO', 'PENDIENTE') WHERE id = ?")) {
+                        "UPDATE fiados SET saldo = saldo - ?, estado = CASE WHEN saldo - ? <= 0 THEN 'PAGADO' ELSE 'PENDIENTE' END WHERE id = ?")) {
                     ps.setBigDecimal(1, aplicar);
                     ps.setBigDecimal(2, aplicar);
                     ps.setInt(3, ids.get(i)[0]);

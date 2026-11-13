@@ -16,14 +16,36 @@ public class TicketDialog {
     private TicketDialog() {
     }
 
-    public static void mostrar(String encabezado, String texto) {
-        TextArea area = new TextArea(texto);
+    // La vista del ticket para mostrar en pantalla: el texto sin las marcas de la impresora y, si es un recibo, el logo arriba.
+    public static javafx.scene.Node vista(String texto) {
+        boolean conLogo = texto.indexOf(com.pos.servicio.ReciboService.LOGO) >= 0;
+        String paraVer = com.pos.servicio.ReciboService.paraPantalla(texto);
+        TextArea area = new TextArea(paraVer);
         area.setEditable(false);
         area.getStyleClass().add("recibo");
         // Ancho fijo: los tickets tienen 48 caracteres por línea y deben verse completos.
         area.setPrefWidth(480);
         area.setMinWidth(480);
-        area.setPrefRowCount(Math.min(34, texto.split("\n").length + 1));
+        area.setPrefRowCount(Math.min(34, paraVer.split("\n").length + 1));
+        if (conLogo) {
+            java.awt.image.BufferedImage logo = com.pos.servicio.LogoRecibo.paraPapel(240);
+            if (logo != null) {
+                javafx.scene.image.WritableImage imagen = new javafx.scene.image.WritableImage(logo.getWidth(), logo.getHeight());
+                for (int y = 0; y < logo.getHeight(); y++) {
+                    for (int x = 0; x < logo.getWidth(); x++) {
+                        imagen.getPixelWriter().setArgb(x, y, 0xFF000000 | logo.getRGB(x, y));
+                    }
+                }
+                javafx.scene.layout.VBox caja = new javafx.scene.layout.VBox(6, new javafx.scene.image.ImageView(imagen), area);
+                caja.setAlignment(javafx.geometry.Pos.TOP_CENTER);
+                return caja;
+            }
+        }
+        return area;
+    }
+
+    public static void mostrar(String encabezado, String texto) {
+        javafx.scene.Node contenido = vista(texto);
 
         ButtonType imprimir = new ButtonType("Imprimir", ButtonBar.ButtonData.OTHER);
         ButtonType cerrar = new ButtonType("Cerrar", ButtonBar.ButtonData.OK_DONE);
@@ -31,7 +53,7 @@ public class TicketDialog {
         Dialog<ButtonType> dialogo = new Dialog<>();
         dialogo.setTitle(Marca.PRODUCTO);
         dialogo.setHeaderText(encabezado);
-        dialogo.getDialogPane().setContent(area);
+        dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getStylesheets().add(Mensajes.CSS);
         dialogo.getDialogPane().getButtonTypes().addAll(imprimir, cerrar);
 

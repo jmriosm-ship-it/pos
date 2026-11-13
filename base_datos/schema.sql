@@ -1,3 +1,5 @@
+-- ATENCIÓN: este es el esquema ANTIGUO de MySQL (ya no se usa). El esquema vigente, para PostgreSQL/Supabase, está en src/main/resources/db/schema_postgres.sql
+
 -- =====================================================================
 -- POS 2.0 - Esquema de base de datos (MySQL 8)
 -- Se ejecuta UNA vez para crear todas las tablas.

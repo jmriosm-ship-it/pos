@@ -27,12 +27,13 @@ public class ReportesView extends VBox {
 
     private final PeriodoReporte periodo = new PeriodoReporte();
     private final ToggleGroup chipsPeriodo = new ToggleGroup();
+    // Solo el Resumen (la primera pestaña) lee sus datos al abrir el módulo; las demás, la primera vez que se abren.
     private final ResumenPanel resumen = new ResumenPanel(periodo);
-    private final VentasHistorialPanel ventas = new VentasHistorialPanel(periodo);
-    private final GastosPanel gastos = new GastosPanel(periodo);
-    private final HistorialPanel historial = new HistorialPanel(periodo);
-    private final CalendarioPanel calendario = new CalendarioPanel();
-    private final FacturasPanel facturas = new FacturasPanel();
+    private final Perezosa<VentasHistorialPanel> ventas = new Perezosa<>(() -> new VentasHistorialPanel(periodo));
+    private final Perezosa<GastosPanel> gastos = new Perezosa<>(() -> new GastosPanel(periodo));
+    private final Perezosa<HistorialPanel> historial = new Perezosa<>(() -> new HistorialPanel(periodo));
+    private final Perezosa<CalendarioPanel> calendario = new Perezosa<>(CalendarioPanel::new);
+    private final Perezosa<FacturasPanel> facturas = new Perezosa<>(FacturasPanel::new);
     private final TabPane pestanas = new TabPane();
     private boolean ignorar = false;
 
@@ -63,19 +64,19 @@ public class ReportesView extends VBox {
 
         // Pestañas
         Tab pResumen = pestana("Resumen", "Alt+1", resumen);
-        Tab pVentas = pestana("Ventas", "Alt+2", ventas);
-        Tab pGastos = pestana("Gastos", "Alt+3", gastos);
-        Tab pMovimientos = pestana("Movimientos", "Alt+4", historial);
-        Tab pCalendario = pestana("Calendario", "Alt+5", calendario);
-        Tab pFacturas = pestana("Facturas", "Alt+6", facturas);
+        Tab pVentas = pestana("Ventas", "Alt+2", null);
+        Tab pGastos = pestana("Gastos", "Alt+3", null);
+        Tab pMovimientos = pestana("Movimientos", "Alt+4", null);
+        Tab pCalendario = pestana("Calendario", "Alt+5", null);
+        Tab pFacturas = pestana("Facturas", "Alt+6", null);
         pestanas.getTabs().addAll(pResumen, pVentas, pGastos, pMovimientos, pCalendario, pFacturas);
-        pMovimientos.setOnSelectionChanged(e -> { if (pMovimientos.isSelected()) historial.recargar(); });
-        pCalendario.setOnSelectionChanged(e -> { if (pCalendario.isSelected()) calendario.recargar(); });
-        pFacturas.setOnSelectionChanged(e -> { if (pFacturas.isSelected()) facturas.recargar(); });
+        historial.enPestana(pMovimientos, HistorialPanel::recargar);
+        calendario.enPestana(pCalendario, CalendarioPanel::recargar);
+        facturas.enPestana(pFacturas, FacturasPanel::recargar);
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         pResumen.setOnSelectionChanged(e -> { if (pResumen.isSelected()) resumen.recargar(); });
-        pVentas.setOnSelectionChanged(e -> { if (pVentas.isSelected()) ventas.recargar(); });
-        pGastos.setOnSelectionChanged(e -> { if (pGastos.isSelected()) gastos.recargar(); });
+        ventas.enPestana(pVentas, VentasHistorialPanel::recargar);
+        gastos.enPestana(pGastos, GastosPanel::recargar);
         VBox.setVgrow(pestanas, Priority.ALWAYS);
 
         getChildren().addAll(barra, pestanas);

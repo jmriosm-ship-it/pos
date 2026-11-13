@@ -14,7 +14,7 @@ import java.sql.Timestamp;
 public class CajaDAO {
 
     // Abre una caja nueva: guarda quién la abre y con cuánto efectivo empieza.
-    // La fecha de apertura y el estado ABIERTA los pone MySQL solo (DEFAULT del esquema).
+    // La fecha de apertura y el estado ABIERTA los pone la base de datos solo (DEFAULT del esquema).
     public void abrir(Caja c) throws SQLException {
         String sql = "INSERT INTO cajas (id_usuario, monto_inicial) VALUES (?, ?)";
 
@@ -35,6 +35,14 @@ public class CajaDAO {
 
     // Busca la caja ABIERTA de un usuario. Devuelve null si no tiene ninguna.
     public Caja buscarAbiertaDeUsuario(int idUsuario) throws SQLException {
+        try {
+            return buscarAbiertaDeUsuarioDb(idUsuario);
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.cajaAbierta(idUsuario);
+        }
+    }
+
+    private Caja buscarAbiertaDeUsuarioDb(int idUsuario) throws SQLException {
         String sql = "SELECT * FROM cajas WHERE id_usuario = ? AND estado = 'ABIERTA'";
 
         try (Connection con = Conexion.obtener();
@@ -51,8 +59,45 @@ public class CajaDAO {
         return null;
     }
 
+    // Un cierre ya hecho, con el nombre de quien tenía la caja.
+    public record CierreFila(Caja caja, String cajero) {
+    }
+
+    // Los últimos cierres (los más recientes primero). idUsuario = null trae los de todos.
+    public java.util.List<CierreFila> listarCerradas(Integer idUsuario, int limite) throws SQLException {
+        String sql = "SELECT c.*, u.nombre AS cajero FROM cajas c JOIN usuarios u ON u.id = c.id_usuario "
+                + "WHERE c.estado = 'CERRADA'" + (idUsuario == null ? " " : " AND c.id_usuario = ? ")
+                + "ORDER BY c.cerrada_en DESC LIMIT ?";
+        java.util.List<CierreFila> lista = new java.util.ArrayList<>();
+        try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {
+            int i = 1;
+            if (idUsuario != null) {
+                ps.setInt(i++, idUsuario);
+            }
+            ps.setInt(i, limite);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lista.add(new CierreFila(mapear(rs), rs.getString("cajero")));
+                }
+            }
+        }
+        return lista;
+    }
+
+    // Cambia el monto con el que se abrió una caja que sigue abierta (por ejemplo, si se olvidó ponerlo bien).
+    public void corregirBase(int idCaja, java.math.BigDecimal nuevoMonto) throws SQLException {
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = con.prepareStatement("UPDATE cajas SET monto_inicial = ? WHERE id = ? AND estado = 'ABIERTA'")) {
+            ps.setBigDecimal(1, nuevoMonto);
+            ps.setInt(2, idCaja);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalStateException("Esa caja ya no está abierta.");
+            }
+        }
+    }
+
     // Cierra la caja: guarda lo esperado, lo contado y la diferencia.
-    // NOW() es la fecha y hora actual de MySQL.
+    // NOW() es la fecha y hora actual de la base de datos.
     public void cerrar(Caja c) throws SQLException {
         String sql = "UPDATE cajas SET cerrada_en = NOW(), monto_esperado = ?, monto_contado = ?, "
                 + "diferencia = ?, estado = 'CERRADA' WHERE id = ?";
@@ -91,6 +136,9 @@ public class CajaDAO {
                 + " SELECT -d.monto FROM devoluciones d WHERE d.id_caja = ? AND d.metodo = 'EFECTIVO'"
                 + " UNION ALL"
                 + " SELECT cp.valor FROM credito_pagos cp WHERE cp.id_caja = ? AND cp.metodo = 'EFECTIVO'"
+                // El efectivo que salió de la caja para pagarle a los proveedores.
+                + " UNION ALL"
+                + " SELECT -ac.monto FROM abonos_compra ac WHERE ac.id_caja = ? AND ac.metodo = 'EFECTIVO'"
                 + ") t";
 
         try (Connection con = Conexion.obtener();
@@ -102,6 +150,7 @@ public class CajaDAO {
             ps.setInt(4, idCaja);
             ps.setInt(5, idCaja);
             ps.setInt(6, idCaja);
+            ps.setInt(7, idCaja);
 
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -120,6 +169,18 @@ public class CajaDAO {
     // Lo que se recibió en esta caja como abonos de fiados, por método de pago.
     public java.util.Map<String, BigDecimal> abonosPorMetodo(int idCaja) throws SQLException {
         return sumarPorMetodo("SELECT metodo, SUM(monto) FROM abonos_fiado WHERE id_caja = ? GROUP BY metodo", idCaja);
+    }
+
+    // El efectivo que salió de esta caja para pagarle a los proveedores.
+    public BigDecimal pagosProveedoresEfectivo(int idCaja) throws SQLException {
+        try (Connection con = Conexion.obtener();
+             PreparedStatement ps = con.prepareStatement("SELECT COALESCE(SUM(monto), 0) FROM abonos_compra WHERE id_caja = ? AND metodo = 'EFECTIVO'")) {
+            ps.setInt(1, idCaja);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getBigDecimal(1);
+            }
+        }
     }
 
     // Cuántas ventas (no anuladas) se hicieron en esta caja.

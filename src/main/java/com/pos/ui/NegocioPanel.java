@@ -36,6 +36,9 @@ public class NegocioPanel extends VBox {
     private final TextField nombre = new TextField();
     private final TextField nit = new TextField();
     private final TextField telefono = new TextField();
+    private final TextField titular = new TextField();
+    private final TextField actividad = new TextField();
+    private final TextField pie = new TextField();
     private final ComboBox<String> impresoras = new ComboBox<>();
     private final ToggleGroup ancho = new ToggleGroup();
     private final TextField cajaNombre = new TextField();
@@ -59,7 +62,9 @@ public class NegocioPanel extends VBox {
                 campo("Nombre del negocio", "F2", nombre),
                 campo("Nombre de esta caja (sus iniciales forman el número del recibo, ej: C1-00005)", null, cajaNombre),
                 new HBox(12, crecer(campo("Ciudad (documentos legales)", null, ciudad)), crecer(campo("Correo para reclamos", null, correo))),
-                new HBox(12, crecer(campo("NIT", null, nit)), crecer(campo("Teléfono", null, telefono))));
+                new HBox(12, crecer(campo("NIT", null, nit)), crecer(campo("Teléfono / WhatsApp", null, telefono))),
+                new HBox(12, crecer(campo("Titular (sale en el recibo)", null, titular)), crecer(campo("Actividad (bajo el nombre, ej: PERFUMERÍA)", null, actividad))),
+                campo("Mensaje al final del recibo", null, pie));
 
         // Tarjeta 2: la impresora
         impresoras.getItems().add(PREDETERMINADA);
@@ -75,7 +80,7 @@ public class NegocioPanel extends VBox {
         prueba.setGraphicTextGap(8);
         prueba.setFocusTraversable(false);
         prueba.setOnAction(e -> imprimirPrueba());
-        VBox tarjetaImpresora = tarjeta("Impresora de recibos", "Una térmica instalada en Windows.",
+        VBox tarjetaImpresora = tarjeta("Impresora de recibos", "De este computador: una térmica instalada en Windows. (Cada local elige la suya.)",
                 campo("Impresora", "F4", impresoras),
                 new HBox(12, campo("Ancho del papel", "F5", chipsAncho), prueba));
         ((HBox) tarjetaImpresora.getChildren().get(tarjetaImpresora.getChildren().size() - 1)).setAlignment(Pos.BOTTOM_LEFT);
@@ -157,6 +162,9 @@ public class NegocioPanel extends VBox {
             nombre.setText(config.obtener(ConfiguracionService.NEGOCIO_NOMBRE, ""));
             nit.setText(config.obtener(ConfiguracionService.NEGOCIO_NIT, ""));
             telefono.setText(config.obtener(ConfiguracionService.NEGOCIO_TELEFONO, ""));
+            titular.setText(config.obtener(ConfiguracionService.NEGOCIO_TITULAR, ""));
+            actividad.setText(config.obtener(ConfiguracionService.NEGOCIO_ACTIVIDAD, ""));
+            pie.setText(config.obtener(ConfiguracionService.RECIBO_PIE, "¡Gracias por su compra!"));
             cajaNombre.setText(config.obtener(ConfiguracionService.CAJA_NOMBRE, "Caja 1"));
             ciudad.setText(config.obtener("negocio_ciudad", ""));
             correo.setText(config.obtener("negocio_correo", ""));
@@ -215,6 +223,9 @@ public class NegocioPanel extends VBox {
             config.guardar(u, ConfiguracionService.LECTOR_SONIDO, pitido.isSelected() ? "true" : "false");
             config.guardar(u, ConfiguracionService.NEGOCIO_NIT, nit.getText());
             config.guardar(u, ConfiguracionService.NEGOCIO_TELEFONO, telefono.getText());
+            config.guardar(u, ConfiguracionService.NEGOCIO_TITULAR, titular.getText());
+            config.guardar(u, ConfiguracionService.NEGOCIO_ACTIVIDAD, actividad.getText());
+            config.guardar(u, ConfiguracionService.RECIBO_PIE, pie.getText());
             config.guardar(u, ConfiguracionService.IMPRESORA_NOMBRE, PREDETERMINADA.equals(elegida) ? "" : elegida);
             config.guardar(u, ConfiguracionService.IMPRESORA_ANCHO_MM, (String) Chips.valor(ancho));
             mensaje.setText("Guardado.");

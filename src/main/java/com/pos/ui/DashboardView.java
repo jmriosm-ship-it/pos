@@ -10,6 +10,7 @@ import com.pos.servicio.InventarioService;
 import com.pos.servicio.Permisos;
 import com.pos.servicio.ReporteService;
 import com.pos.util.Dinero;
+import com.pos.util.Paralelo;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.chart.BarChart;
@@ -54,8 +55,37 @@ public class DashboardView extends ScrollPane {
 
     private void cargar(VBox raiz, Consumer<Modulo> ir) throws SQLException {
         LocalDate hoy = LocalDate.now();
-        ResumenFinanciero r = reportes.resumenHoy();
-        List<Producto> stockBajo = inventario.productosConStockBajo();
+        boolean verClientes = Permisos.puedeVer(usuario, Modulo.CLIENTES);
+        boolean verInventario = Permisos.puedeVer(usuario, Modulo.INVENTARIO) || usuario.esAdmin();
+        // Todo lo que esta pantalla necesita se pide al mismo tiempo (la base está en internet: cada consulta tarda
+        // un rato y, una tras otra, la pantalla se demoraría varios segundos). Después solo se recogen los resultados.
+        var fHoy = Paralelo.lanzarGrupo(() -> reportes.resumenHoy());
+        var fBajo = Paralelo.lanzarGrupo(() -> inventario.productosConStockBajo());
+        var fClientes = verClientes ? Paralelo.lanzarGrupo(() -> new com.pos.dao.ClienteDAO().listarConResumen()) : null;
+        var fCreditos = verClientes ? Paralelo.lanzarGrupo(() -> {
+            com.pos.servicio.CreditoService cs = new com.pos.servicio.CreditoService();
+            java.math.BigDecimal saldo = java.math.BigDecimal.ZERO;
+            int mora = 0;
+            for (com.pos.dao.CreditoDAO.Fila f : cs.listar(true)) {
+                com.pos.servicio.CreditoService.Estado e = cs.estado(f);
+                saldo = saldo.add(e.saldo());
+                if (e.mora().signum() > 0) {
+                    mora++;
+                }
+            }
+            return new Object[]{saldo, mora};
+        }) : null;
+        var fFinancieras = verClientes ? Paralelo.lanzarGrupo(() -> new com.pos.servicio.FinancieraService().totalPorCobrar()) : null;
+        var fTodos = verInventario ? Paralelo.lanzarGrupo(() -> new com.pos.dao.ProductoDAO().listar()) : null;
+        var fMes = usuario.esAdmin() ? Paralelo.lanzarGrupo(() -> reportes.resumen(hoy.withDayOfMonth(1), hoy)) : null;
+        var fCuotas = usuario.esAdmin() ? Paralelo.lanzarGrupo(() -> new com.pos.servicio.CreditoService().avisosPendientes().size()) : null;
+        var fReponer = usuario.esAdmin() ? Paralelo.lanzarGrupo(() -> new com.pos.servicio.InteligenteService().porReponer().size()) : null;
+        var fPorPagar = usuario.esAdmin() ? Paralelo.lanzarGrupo(() -> new com.pos.servicio.CompraService().totalPorPagar()) : null;
+        var fSemana = Paralelo.lanzarGrupo(() -> reportes.ventasUltimosDias(7));
+        var fMasVendidos = Paralelo.lanzarGrupo(() -> reportes.masVendidos(hoy, hoy, 5));
+
+        ResumenFinanciero r = Paralelo.esperar(fHoy);
+        List<Producto> stockBajo = Paralelo.esperar(fBajo);
 
         // Fila 1: tarjetas de números
         HBox metricas = new HBox(14);
@@ -70,33 +100,28 @@ public class DashboardView extends ScrollPane {
 
         // Fila 1b: lo que se debe, lo que hay en bodega y la ganancia del mes (según lo que cada usuario puede ver)
         HBox metricas2 = new HBox(14);
-        if (Permisos.puedeVer(usuario, Modulo.CLIENTES)) {
+        if (verClientes) {
             java.math.BigDecimal fiado = java.math.BigDecimal.ZERO;
-            for (com.pos.modelo.Cliente c : new com.pos.dao.ClienteDAO().listarConResumen()) {
+            for (com.pos.modelo.Cliente c : Paralelo.esperar(fClientes)) {
                 fiado = fiado.add(c.getSaldoPendiente() == null ? java.math.BigDecimal.ZERO : c.getSaldoPendiente());
             }
-            com.pos.servicio.CreditoService creditos = new com.pos.servicio.CreditoService();
-            java.math.BigDecimal enCreditos = java.math.BigDecimal.ZERO;
-            int enMora = 0;
-            for (com.pos.dao.CreditoDAO.Fila f : creditos.listar(true)) {
-                com.pos.servicio.CreditoService.Estado e = creditos.estado(f);
-                enCreditos = enCreditos.add(e.saldo());
-                if (e.mora().signum() > 0) {
-                    enMora++;
-                }
-            }
-            java.math.BigDecimal financieras = new com.pos.servicio.FinancieraService().totalPorCobrar();
+            Object[] creditos = Paralelo.esperar(fCreditos);
+            java.math.BigDecimal enCreditos = (java.math.BigDecimal) creditos[0];
+            int enMora = (Integer) creditos[1];
+            java.math.BigDecimal financieras = Paralelo.esperar(fFinancieras);
             java.math.BigDecimal porCobrar = fiado.add(enCreditos).add(financieras);
             metricas2.getChildren().add(metrica("Por cobrar", Dinero.formato(porCobrar),
                     "fiado, créditos y financiera" + (enMora > 0 ? " · " + enMora + " en mora" : ""), enMora > 0));
         }
-        if (Permisos.puedeVer(usuario, Modulo.INVENTARIO) || usuario.esAdmin()) {
-            List<Producto> todos = new com.pos.dao.ProductoDAO().listar();
+        if (verInventario) {
+            List<Producto> todos = Paralelo.esperar(fTodos);
             int unidades = todos.stream().mapToInt(Producto::getStock).sum();
             metricas2.getChildren().add(metrica("En bodega", unidades + " unidades", todos.size() + " productos", false));
         }
         if (usuario.esAdmin()) {
-            ResumenFinanciero mes = reportes.resumen(hoy.withDayOfMonth(1), hoy);
+            ResumenFinanciero mes = Paralelo.esperar(fMes);
+            java.math.BigDecimal porPagar = Paralelo.esperar(fPorPagar);
+            metricas2.getChildren().add(metrica("Por pagar", Dinero.formato(porPagar), "a proveedores", porPagar.signum() > 0));
             metricas2.getChildren().add(metrica("Ganancia neta del mes", Dinero.formato(mes.gananciaNeta()),
                     mes.numeroVentas() + " ventas · ingresos " + Dinero.formato(mes.ingresos()), mes.gananciaNeta().signum() < 0));
         }
@@ -104,12 +129,12 @@ public class DashboardView extends ScrollPane {
         // Avisos (solo administrador): cuotas por avisar y productos por reponer según lo que se vende.
         VBox avisos = new VBox(8);
         if (usuario.esAdmin()) {
-            int cuotas = new com.pos.servicio.CreditoService().avisosPendientes().size();
+            int cuotas = Paralelo.esperar(fCuotas);
             if (cuotas > 0) {
                 avisos.getChildren().add(aviso("Hay " + cuotas + (cuotas == 1 ? " cuota" : " cuotas")
                         + " por avisar a los clientes por WhatsApp.", "Ir a Créditos", Modulo.CLIENTES, ir));
             }
-            int porReponer = new com.pos.servicio.InteligenteService().porReponer().size();
+            int porReponer = Paralelo.esperar(fReponer);
             if (porReponer > 0) {
                 avisos.getChildren().add(aviso(porReponer + (porReponer == 1 ? " producto se está acabando" : " productos se están acabando")
                         + " según lo que se vende.", "Ver qué reponer", Modulo.INVENTARIO, ir));
@@ -117,9 +142,9 @@ public class DashboardView extends ScrollPane {
         }
 
         // Fila 2: gráfica de la semana y más vendidos
-        VBox graficaTarjeta = tarjeta("Ventas de los últimos 7 días", crearGrafica(reportes.ventasUltimosDias(7), hoy));
+        VBox graficaTarjeta = tarjeta("Ventas de los últimos 7 días", crearGrafica(Paralelo.esperar(fSemana), hoy));
         HBox.setHgrow(graficaTarjeta, Priority.ALWAYS);
-        VBox masVendidos = tarjeta("Más vendidos hoy", listaMasVendidos(reportes.masVendidos(hoy, hoy, 5)));
+        VBox masVendidos = tarjeta("Más vendidos hoy", listaMasVendidos(Paralelo.esperar(fMasVendidos)));
         masVendidos.setPrefWidth(340);
         masVendidos.setMinWidth(340);
         HBox fila2 = new HBox(14, graficaTarjeta, masVendidos);

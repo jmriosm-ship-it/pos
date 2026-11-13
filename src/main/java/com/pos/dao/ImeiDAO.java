@@ -22,7 +22,7 @@ public class ImeiDAO {
 
     // Todos los IMEI de un producto (disponibles y vendidos).
     public List<String> todos(int idProducto) throws SQLException {
-        return listar("SELECT CONCAT(imei, IF(estado = 'VENDIDO', '  (vendido)', '')) FROM producto_imeis "
+        return listar("SELECT imei || CASE WHEN estado = 'VENDIDO' THEN '  (vendido)' ELSE '' END FROM producto_imeis "
                 + "WHERE id_producto = ? ORDER BY id", idProducto);
     }
 

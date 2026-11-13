@@ -215,7 +215,7 @@ public class CreditoDAO {
     public void marcarAviso(int idCredito, String clave) throws SQLException {
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement("INSERT INTO credito_avisos (id_credito, clave) VALUES (?, ?) "
-                     + "ON DUPLICATE KEY UPDATE fecha = CURRENT_TIMESTAMP")) {
+                     + "ON CONFLICT (id_credito, clave) DO UPDATE SET fecha = CURRENT_TIMESTAMP")) {
             ps.setInt(1, idCredito);
             ps.setString(2, clave);
             ps.executeUpdate();

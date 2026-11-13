@@ -71,7 +71,18 @@ public class CopiasView extends VBox {
         fila.setAlignment(Pos.CENTER_LEFT);
         estado.getStyleClass().add("texto-suave");
         estado.setWrapText(true);
-        VBox tarjeta = new VBox(8, fila, estado);
+        // La copia diaria automática (ya viene encendida).
+        Label automatica = new Label();
+        automatica.getStyleClass().add("texto-suave");
+        automatica.setWrapText(true);
+        try {
+            String ultima = config.obtener("copia_auto_ultima", "");
+            automatica.setText("Copia automática diaria: activada. Cada día, con el programa abierto, se guarda sola una copia en esta carpeta"
+                    + " (se conservan las últimas 30)." + (ultima.isEmpty() ? " Todavía no se ha hecho la primera." : " Última automática: " + ultima + "."));
+        } catch (SQLException e) {
+            automatica.setText("Copia automática diaria: activada.");
+        }
+        VBox tarjeta = new VBox(8, fila, estado, automatica);
         tarjeta.getStyleClass().add("card");
 
         // Lista de copias

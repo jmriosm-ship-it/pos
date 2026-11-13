@@ -13,14 +13,24 @@ import java.util.List;
 public class AuditoriaService {
 
     private static final AuditoriaDAO DAO = new AuditoriaDAO();
+    private static final java.util.concurrent.ExecutorService SEGUNDO_PLANO = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "registro-acciones");
+        t.setDaemon(true);
+        return t;
+    });
 
     // Anota una acción. "usuario" puede ser null (por ejemplo un intento de entrada fallido).
     public static void registrar(Usuario usuario, String accion, String detalle) {
-        try {
-            DAO.insertar(usuario == null ? null : usuario.getId(), accion, detalle == null ? "" : detalle);
-        } catch (SQLException e) {
-            // el registro es secundario: no se interrumpe la operación
-        }
+        // En segundo plano: anotar tarda un viaje a internet y quien está cobrando o entrando no tiene que esperarlo.
+        Integer id = usuario == null ? null : usuario.getId();
+        String texto = detalle == null ? "" : detalle;
+        SEGUNDO_PLANO.execute(() -> {
+            try {
+                DAO.insertar(id, accion, texto);
+            } catch (SQLException e) {
+                // el registro es secundario: no se interrumpe la operación
+            }
+        });
     }
 
     public List<AuditoriaDAO.Fila> listar(Usuario quien, String texto) throws SQLException {

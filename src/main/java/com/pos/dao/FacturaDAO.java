@@ -32,7 +32,7 @@ public class FacturaDAO {
         List<Fila> lista = new ArrayList<>();
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement("SELECT f.*, u.nombre FROM facturas f JOIN usuarios u ON u.id = f.id_usuario "
-                     + "WHERE f.eliminada = ? AND (f.cliente LIKE ? OR f.nota LIKE ? OR u.nombre LIKE ?) ORDER BY f.id DESC")) {
+                     + "WHERE f.eliminada = ? AND (f.cliente ILIKE ? OR f.nota ILIKE ? OR u.nombre ILIKE ?) ORDER BY f.id DESC")) {
             ps.setBoolean(1, papelera);
             ps.setString(2, patron);
             ps.setString(3, patron);
@@ -50,7 +50,7 @@ public class FacturaDAO {
     public void marcarEliminada(int id, boolean eliminada) throws SQLException {
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement("UPDATE facturas SET eliminada = ?, fecha_eliminada = "
-                     + "IF(?, NOW(), NULL) WHERE id = ?")) {
+                     + "CASE WHEN ? THEN NOW() ELSE NULL END WHERE id = ?")) {
             ps.setBoolean(1, eliminada);
             ps.setBoolean(2, eliminada);
             ps.setInt(3, id);

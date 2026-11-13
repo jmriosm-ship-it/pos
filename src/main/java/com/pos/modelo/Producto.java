@@ -10,7 +10,9 @@ import java.math.BigDecimal;
  * Regla de oro: el modelo SOLO guarda datos. No habla con la base de datos
  * (eso lo hace el DAO) ni con la pantalla (eso lo hace el controlador).
  */
-public class Producto {
+public class Producto implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
 
     // Un atributo por cada columna de la tabla "productos".
     // private = nadie de afuera los toca directo, solo con getters/setters.

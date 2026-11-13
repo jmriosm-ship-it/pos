@@ -81,7 +81,7 @@ public class CategoriaDAO {
         }
     }
 
-    // Inserta una categoría nueva y le asigna el id que generó MySQL.
+    // Inserta una categoría nueva y le asigna el id que generó la base de datos.
     public void insertar(Categoria c) throws SQLException {
         String sql = "INSERT INTO categorias (nombre) VALUES (?)";
 
@@ -99,7 +99,7 @@ public class CategoriaDAO {
         }
     }
 
-    // Elimina una categoría. Si algún producto la usa, MySQL lo rechaza
+    // Elimina una categoría. Si algún producto la usa, la base de datos lo rechaza
     // (por la llave foránea) y lanza SQLException.
     public void eliminar(int id) throws SQLException {
         String sql = "DELETE FROM categorias WHERE id = ?";

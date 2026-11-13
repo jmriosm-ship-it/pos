@@ -60,6 +60,7 @@ public class ComprobanteCajaService {
         fila(sb, "Ingresos manuales", mov.total(caja.getId(), "INGRESO"), ancho);
         fila(sb, "Egresos manuales", mov.total(caja.getId(), "EGRESO"), ancho);
         fila(sb, "Devoluciones en efectivo", mov.devolucionesEfectivo(caja.getId()), ancho);
+        fila(sb, "Pagos a proveedores (efectivo)", cajaDAO.pagosProveedoresEfectivo(caja.getId()), ancho);
 
         // El arqueo
         sb.append(TextoTicket.izqDer("ESPERADO EN CAJA", TextoTicket.dinero(caja.getMontoEsperado()), ancho)).append('\n');

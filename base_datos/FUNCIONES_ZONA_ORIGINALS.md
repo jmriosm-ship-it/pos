@@ -51,3 +51,14 @@ Lo que ya tiene el POS Java y el viejo no (caja con arqueo/comprobante, permisos
 **Inventario inteligente**: ritmo = vendidas 30 d /30; días = stock/ritmo; nivel agotado (stock<=0), bajo (stock<=mínimo), pronto (días<7); sugerido pedir `max(ceil(ritmo*30)−stock, mínimo*2−stock, 1)`.
 **Configuración**: negocio (nombre, NIT, teléfono, dirección, mensaje recibo, texto garantía, datos del titular legal), puntos, crédito, categorías, promociones, usuarios (PIN 4–6 dígitos, permisos), registro/auditoría (inicio sesión, devoluciones, anulaciones, gastos, usuarios, PIN, sueldos...), impresora/pistola (sonido), ayuda y documentos legales (privacidad, términos, garantía, crédito, autorización), copias.
 **Pistola**: ráfaga de teclas <60 ms y largo >=4 se toma como código aunque no esté el cursor en el buscador; pitido bueno/malo.
+
+## Segunda revisión (2026-11-13): lo que faltaba y ya se agregó
+- [x] Importar / exportar inventario en CSV (Productos: F9 exportar, F10 importar) — `ProductoCsvService`.
+- [x] Ajustes por computador: impresora, ancho de papel, nombre de caja (C1/C2) y sonido de la pistola se guardan en el PC (`~/.sistema-sas/equipo.properties`), no en la base compartida.
+- [x] Cierres anteriores (ver / reimprimir) y Corregir base de la caja abierta (solo admin) en la pantalla de Caja.
+- [x] Compras a plazo: pago inicial + medio, abonos a proveedores (Compras: F7), saldo, "Por pagar" en Inicio; el efectivo pagado sale de la caja y sale en el comprobante.
+- [x] Recordatorio de deuda de fiado por WhatsApp (Clientes: F6).
+- [x] Cliente nuevo desde la pantalla de Ventas (botón +).
+- [x] Historial por producto (Inventario > Existencias: F8).
+- No se hace (decisión del usuario / no aplica): descuento con PIN de administrador, IMEI/garantía (es perfumería), PIN de 4–6 dígitos para entrar, fusión de datos entre computadores (la base compartida en Supabase lo reemplaza).
+- Pendiente: resumen de todas las cajas del admin en una sola vista; foto de la factura del proveedor en la compra.

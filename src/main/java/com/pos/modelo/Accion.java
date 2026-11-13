@@ -26,7 +26,8 @@ public enum Accion {
     public static Set<Accion> deModulo(Modulo m) {
         return switch (m) {
             case PRODUCTOS, CATEGORIAS_PROVEEDORES, CLIENTES, USUARIOS -> EnumSet.allOf(Accion.class);
-            case VENTAS, INVENTARIO -> EnumSet.of(CREAR, EDITAR);   // ventas: cobrar y cambiar precio · inventario: compras y ajustes
+            case VENTAS -> EnumSet.of(CREAR, EDITAR);   // cobrar y cambiar precio
+            case INVENTARIO -> EnumSet.allOf(Accion.class);   // compras: registrar, editar, anular
             case HISTORIAL -> EnumSet.of(BORRAR);                    // anular y devolver
             case CAJA -> EnumSet.of(CREAR, BORRAR);                  // abrir/cerrar y movimientos · devolver dinero
             default -> EnumSet.noneOf(Accion.class);
@@ -39,7 +40,7 @@ public enum Accion {
             case VENTAS -> a == CREAR ? "Cobrar ventas" : "Cambiar precios al cobrar";
             case HISTORIAL -> "Anular y devolver";
             case CAJA -> a == CREAR ? "Abrir, cerrar y movimientos" : "Devolver dinero";
-            case INVENTARIO -> a == CREAR ? "Registrar compras" : "Ajustar existencias";
+            case INVENTARIO -> a == CREAR ? "Registrar compras" : a == EDITAR ? "Editar compras y ajustar existencias" : "Anular compras";
             default -> a.titulo;
         };
     }

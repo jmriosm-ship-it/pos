@@ -17,7 +17,7 @@ import javafx.scene.layout.VBox;
 
 import java.sql.SQLException;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /**
  * Pestaña "Por reponer" (Inventario): qué productos se están acabando según lo que se vende, cuánto les alcanza
@@ -26,12 +26,12 @@ import java.util.function.Consumer;
 public class PorReponerPanel extends VBox {
 
     private final InteligenteService servicio = new InteligenteService();
-    private final Consumer<Producto> alComprar;
+    private final BiConsumer<Producto, Integer> alComprar;
     private final TableView<InteligenteService.Fila> tabla = new TableView<>();
     private final Label resumen = new Label();
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
 
-    public PorReponerPanel(Consumer<Producto> alComprar) {
+    public PorReponerPanel(BiConsumer<Producto, Integer> alComprar) {
         this.alComprar = alComprar;
         setSpacing(12);
 
@@ -109,9 +109,11 @@ public class PorReponerPanel extends VBox {
 
     private void comprar() {
         InteligenteService.Fila f = tabla.getSelectionModel().getSelectedItem();
-        if (f != null) {
-            alComprar.accept(f.producto());
+        if (f == null) {
+            Mensajes.info("Elige un producto", "Selecciona un producto de la lista para comprarlo.");
+            return;
         }
+        alComprar.accept(f.producto(), f.sugerido());
     }
 
     private void tecla(KeyEvent e) {

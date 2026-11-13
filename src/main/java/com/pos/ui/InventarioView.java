@@ -15,10 +15,11 @@ import javafx.scene.input.KeyEvent;
 public class InventarioView extends TabPane {
 
     private final ExistenciasPanel existencias;
-    private final CompraPanel compra = new CompraPanel();
-    private final MovimientosPanel movimientos = new MovimientosPanel();
-    private final ComprasHistorialPanel compras = new ComprasHistorialPanel();
-    private final PorReponerPanel porReponer = new PorReponerPanel(this::irAComprar);
+    // Solo Existencias (la primera pestaña) lee sus datos al abrir el módulo; las demás, la primera vez que se abren.
+    private final Perezosa<CompraPanel> compra = new Perezosa<>(CompraPanel::new);
+    private final Perezosa<MovimientosPanel> movimientos = new Perezosa<>(MovimientosPanel::new);
+    private final Perezosa<ComprasHistorialPanel> compras = new Perezosa<>(ComprasHistorialPanel::new);
+    private final Perezosa<PorReponerPanel> porReponer = new Perezosa<>(() -> new PorReponerPanel((p, n) -> irAComprar(p, n)));
     private final Tab pestanaCompra;
 
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
@@ -30,18 +31,18 @@ public class InventarioView extends TabPane {
         existencias = new ExistenciasPanel(this::irAComprar);
 
         Tab pExistencias = pestana("Existencias", "Alt+1", existencias);
-        pestanaCompra = pestana("Nueva compra", "Alt+2", compra);
-        Tab pMovimientos = pestana("Movimientos", "Alt+3", movimientos);
-        Tab pCompras = pestana("Compras", "Alt+4", compras);
-        Tab pReponer = pestana("Por reponer", "Alt+5", porReponer);
+        pestanaCompra = pestana("Nueva compra", "Alt+2", null);
+        Tab pMovimientos = pestana("Movimientos", "Alt+3", null);
+        Tab pCompras = pestana("Compras", "Alt+4", null);
+        Tab pReponer = pestana("Por reponer", "Alt+5", null);
         getTabs().addAll(pExistencias, pestanaCompra, pMovimientos, pCompras, pReponer);
-        pReponer.setOnSelectionChanged(e -> { if (pReponer.isSelected()) porReponer.recargar(); });
 
-        // Al abrir una pestaña se vuelven a leer sus datos (por si cambiaron en otra).
+        // La primera vez que se abre una pestaña se arma y lee sus datos; las siguientes veces se actualiza (por si cambiaron en otra).
         pExistencias.setOnSelectionChanged(e -> { if (pExistencias.isSelected()) existencias.recargar(); });
-        pestanaCompra.setOnSelectionChanged(e -> { if (pestanaCompra.isSelected()) compra.recargar(); });
-        pMovimientos.setOnSelectionChanged(e -> { if (pMovimientos.isSelected()) movimientos.recargar(); });
-        pCompras.setOnSelectionChanged(e -> { if (pCompras.isSelected()) compras.recargar(); });
+        compra.enPestana(pestanaCompra, CompraPanel::recargar);
+        movimientos.enPestana(pMovimientos, MovimientosPanel::recargar);
+        compras.enPestana(pCompras, ComprasHistorialPanel::recargar);
+        porReponer.enPestana(pReponer, PorReponerPanel::recargar);
 
         sceneProperty().addListener((o, antigua, nueva) -> {
             if (antigua != null) {
@@ -61,7 +62,13 @@ public class InventarioView extends TabPane {
 
     private void irAComprar(Producto p) {
         getSelectionModel().select(pestanaCompra);
-        compra.agregarDesdeExistencias(p);
+        compra.get().agregarDesdeExistencias(p);
+    }
+
+    // Desde "Por reponer": además del producto, lleva la cantidad que se sugiere pedir.
+    private void irAComprar(Producto p, int sugerido) {
+        getSelectionModel().select(pestanaCompra);
+        compra.get().agregarDesdeExistencias(p, sugerido);
     }
 
     // Alt + 1...4 = ir a esa pestaña.

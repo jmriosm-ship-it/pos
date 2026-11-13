@@ -158,6 +158,90 @@ public class CajaView extends VBox {
         } catch (SQLException e) {
             Mensajes.error("No se pudo consultar la caja.\n" + e.getMessage());
         }
+        Node cierres = tarjetaCierres();
+        if (cierres != null) {
+            getChildren().add(cierres);
+        }
+    }
+
+    // ---------------------------------------------------------------- cierres anteriores y corregir la base
+
+    // Los cierres de caja anteriores (el administrador ve los de todas las cajas): se pueden ver y volver a imprimir.
+    private Node tarjetaCierres() {
+        java.util.List<com.pos.dao.CajaDAO.CierreFila> cierres;
+        try {
+            cierres = cajaService.cierresAnteriores(usuario, 15);
+        } catch (SQLException e) {
+            return null;   // es un extra: si falla, la pantalla de la caja sigue funcionando
+        }
+        if (cierres.isEmpty()) {
+            return null;
+        }
+        javafx.scene.control.TableView<com.pos.dao.CajaDAO.CierreFila> tabla = new javafx.scene.control.TableView<>();
+        tabla.setColumnResizePolicy(javafx.scene.control.TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        DateTimeFormatter f = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+        tabla.getColumns().add(Tablas.columna("Caja", 70, (com.pos.dao.CajaDAO.CierreFila c) -> "#" + c.caja().getId()));
+        tabla.getColumns().add(Tablas.columna("Cajero", 160, (com.pos.dao.CajaDAO.CierreFila c) -> c.cajero()));
+        tabla.getColumns().add(Tablas.columna("Cierre", 120, (com.pos.dao.CajaDAO.CierreFila c) -> c.caja().getCerradaEn() == null ? "" : c.caja().getCerradaEn().format(f)));
+        tabla.getColumns().add(Tablas.columna("Esperado", 110, (com.pos.dao.CajaDAO.CierreFila c) -> Dinero.formato(c.caja().getMontoEsperado())));
+        tabla.getColumns().add(Tablas.columna("Contado", 110, (com.pos.dao.CajaDAO.CierreFila c) -> Dinero.formato(c.caja().getMontoContado())));
+        tabla.getColumns().add(Tablas.columna("Diferencia", 110, (com.pos.dao.CajaDAO.CierreFila c) -> Dinero.formato(c.caja().getDiferencia())));
+        tabla.getItems().setAll(cierres);
+        tabla.setPrefHeight(Math.min(260, 60 + cierres.size() * 30));
+        tabla.getSelectionModel().selectFirst();
+
+        Button ver = new Button("Ver comprobante");
+        ver.getStyleClass().add("btn-secundario");
+        ver.setFocusTraversable(false);
+        ver.setOnAction(e -> {
+            var c = tabla.getSelectionModel().getSelectedItem();
+            if (c != null) {
+                verComprobante(c.caja(), c.cajero());
+            }
+        });
+        Button imprimir = new Button("Imprimir");
+        imprimir.getStyleClass().add("btn-secundario");
+        imprimir.setFocusTraversable(false);
+        imprimir.setOnAction(e -> {
+            var c = tabla.getSelectionModel().getSelectedItem();
+            if (c != null) {
+                imprimirComprobante(c.caja(), c.cajero());
+            }
+        });
+        tabla.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                ver.fire();
+            }
+        });
+        return tarjeta("Cierres anteriores", suave(usuario.esAdmin() ? "Los cierres de todas las cajas." : "Tus cierres de caja."),
+                tabla, new HBox(10, ver, imprimir));
+    }
+
+    // Cambia el monto con el que se abrió esta caja (solo el administrador).
+    private void corregirBase(Caja caja) {
+        javafx.scene.control.TextInputDialog pregunta = new javafx.scene.control.TextInputDialog(Dinero.plano(caja.getMontoInicial()));
+        pregunta.setTitle(Marca.PRODUCTO);
+        pregunta.setHeaderText("Corregir la base de la caja");
+        pregunta.setContentText("Monto con el que se abrió:");
+        pregunta.getDialogPane().getStylesheets().add(Mensajes.CSS);
+        java.util.Optional<String> respuesta = pregunta.showAndWait();
+        if (respuesta.isEmpty()) {
+            return;
+        }
+        String digitos = respuesta.get().replaceAll("[^0-9]", "");
+        if (digitos.isEmpty()) {
+            Mensajes.error("Escribe el monto (solo números).");
+            return;
+        }
+        try {
+            cajaService.corregirBase(usuario, caja, new BigDecimal(digitos));
+            alCambiarCaja.run();
+            mostrar(null);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            Mensajes.error(ex.getMessage());
+        } catch (SQLException ex) {
+            Mensajes.error("No se pudo corregir la base.\n" + ex.getMessage());
+        }
     }
 
     // ---------------------------------------------------------------- caja cerrada
@@ -264,10 +348,17 @@ public class CajaView extends VBox {
         sep.setMaxWidth(Double.MAX_VALUE);
         FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F2", "Contar"), Atajos.etiqueta("F3", "Ingreso"),
                 Atajos.etiqueta("F4", "Egreso"), Atajos.etiqueta("F5", "Devolver dinero"), Atajos.etiqueta("F12", "Cerrar caja"));
+        // Solo el administrador puede corregir la base con la que se abrió la caja.
+        Button corregir = new Button("Corregir base");
+        corregir.getStyleClass().add("btn-secundario");
+        corregir.setFocusTraversable(false);
+        corregir.setOnAction(e -> corregirBase(caja));
+        Node filaCorregir = usuario.esAdmin() ? new HBox(corregir) : new Region();
         VBox movimientos = listaMovimientos(caja);
         return tarjeta("Caja abierta",
                 fila("Abierta desde", caja.getAbiertoEn().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))),
                 fila("Monto inicial", Dinero.formato(caja.getMontoInicial())),
+                filaCorregir,
                 fila("Efectivo neto (ventas, abonos, ingresos y egresos)", Dinero.formato(efectivoRecibido)),
                 fila("Esperado en caja", Dinero.formato(esperado)),
                 movimientos, sep, suave("Cuenta el efectivo que hay en la caja y escríbelo:"), contado, filaEstado, cerrar, teclas);
@@ -344,17 +435,25 @@ public class CajaView extends VBox {
     }
 
     private void verComprobante(Caja caja) {
+        verComprobante(caja, usuario.getNombre());
+    }
+
+    private void verComprobante(Caja caja, String cajero) {
         try {
             TicketDialog.mostrar("Comprobante del cierre de caja #" + caja.getId(),
-                    comprobanteService.generar(caja, usuario.getNombre()));
+                    comprobanteService.generar(caja, cajero));
         } catch (SQLException e) {
             Mensajes.error("No se pudo generar el comprobante.\n" + e.getMessage());
         }
     }
 
     private void imprimirComprobante(Caja caja) {
+        imprimirComprobante(caja, usuario.getNombre());
+    }
+
+    private void imprimirComprobante(Caja caja, String cajero) {
         try {
-            TicketDialog.enviar(comprobanteService.generar(caja, usuario.getNombre()));
+            TicketDialog.enviar(comprobanteService.generar(caja, cajero));
         } catch (SQLException e) {
             Mensajes.error("No se pudo generar el comprobante.\n" + e.getMessage());
         }

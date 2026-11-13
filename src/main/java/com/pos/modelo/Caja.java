@@ -3,7 +3,9 @@ package com.pos.modelo;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public class Caja {
+public class Caja implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
     private int id;
     private int idUsuario;
 

@@ -87,17 +87,18 @@ public class ExistenciasPanel extends VBox {
         Chips.alElegir(filtro, this::filtrar);
 
         Button ajustar = boton("Ajustar stock", "F5", "btn-secundario", this::ajustar);
+        Button historial = boton("Historial", "F8", "btn-secundario", this::historialProducto);
         Button comprar = boton("Comprar", "F7", "btn-primario", this::comprar);
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox barra = new HBox(12, buscador, chips, espacio, ajustar, comprar);
+        HBox barra = new HBox(12, buscador, chips, espacio, historial, ajustar, comprar);
         barra.setAlignment(Pos.CENTER_LEFT);
 
         configurarTabla();
         VBox.setVgrow(tabla, Priority.ALWAYS);
 
         FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F2", "Buscar"), Atajos.etiqueta("F6", "Cambiar filtro"),
-                Atajos.etiqueta("F5", "Ajustar stock"), Atajos.etiqueta("F7", "Comprar"),
+                Atajos.etiqueta("F5", "Ajustar stock"), Atajos.etiqueta("F7", "Comprar"), Atajos.etiqueta("F8", "Historial"),
                 Atajos.etiqueta("↑ ↓", "Moverse en la tabla"), Atajos.etiqueta("Enter", "Ajustar el elegido"));
 
         getChildren().addAll(numeros, barra, tabla, teclas);
@@ -235,6 +236,7 @@ public class ExistenciasPanel extends VBox {
             case F5 -> ajustar();
             case F6 -> Chips.siguiente(filtro);
             case F7 -> comprar();
+            case F8 -> historialProducto();
             default -> {
                 return;
             }
@@ -255,6 +257,14 @@ public class ExistenciasPanel extends VBox {
             Mensajes.info("Elige un producto", "Muévete a la tabla con la flecha ↓ y elige un producto.");
         }
         return p;
+    }
+
+    // Todo lo que le ha pasado al producto elegido: compras, ventas, ajustes y devoluciones.
+    private void historialProducto() {
+        Producto p = elegido();
+        if (p != null) {
+            HistorialProductoDialog.abrir(p);
+        }
     }
 
     private void ajustar() {

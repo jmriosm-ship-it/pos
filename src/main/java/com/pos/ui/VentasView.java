@@ -303,6 +303,27 @@ public class VentasView extends StackPane {
         return b;
     }
 
+    // Crea un cliente sin salir de la venta (por ejemplo, para fiar a alguien nuevo) y lo deja elegido.
+    private void clienteNuevo() {
+        if (!com.pos.config.Conectividad.enLinea()) {
+            Mensajes.info("Sin conexión", "Para crear un cliente hace falta internet. Vende al cliente general y créalo después.");
+            return;
+        }
+        if (!Seguridad.permitido(Modulo.CLIENTES, Accion.CREAR, "crear clientes")) {
+            return;
+        }
+        Cliente creado = ClienteDialog.abrir(null);
+        if (creado == null) {
+            return;
+        }
+        try {
+            comboCliente.getItems().setAll(clienteService.listar());
+            comboCliente.getItems().stream().filter(c -> c.getId() == creado.getId()).findFirst().ifPresent(comboCliente::setValue);
+        } catch (SQLException e) {
+            Mensajes.error("El cliente se creó, pero no se pudo actualizar la lista.\n" + e.getMessage());
+        }
+    }
+
     // Panel de la derecha: cliente, subtotal, promociones, descuento y puntos.
     private VBox construirPanelDerecho() {
         comboCliente.setPromptText("Cliente general");
@@ -320,6 +341,8 @@ public class VentasView extends StackPane {
             // sin clientes la venta sigue funcionando como "cliente general"
         }
         Button quitarCliente = mini("×", () -> comboCliente.setValue(null));
+        Button nuevoCliente = mini("+", this::clienteNuevo);
+        nuevoCliente.setTooltip(new javafx.scene.control.Tooltip("Cliente nuevo (Ctrl+N)"));
         HBox.setHgrow(comboCliente, Priority.ALWAYS);
         comboCliente.valueProperty().addListener((o, antes, ahora) -> {   // otro cliente: sus puntos
             if (venta != null) {
@@ -328,7 +351,7 @@ public class VentasView extends StackPane {
                 refrescarCarrito();
             }
         });
-        HBox filaCliente = new HBox(6, comboCliente, quitarCliente);
+        HBox filaCliente = new HBox(6, comboCliente, nuevoCliente, quitarCliente);
         filaCliente.setAlignment(Pos.CENTER_LEFT);
 
         campoDescuento.setPromptText("0");
@@ -539,7 +562,7 @@ public class VentasView extends StackPane {
             return;
         }
         try {
-            visibles = productoService.buscar(texto);
+            visibles = productoService.buscarRapido(texto);
         } catch (SQLException e) {
             Mensajes.error("No se pudieron cargar los productos.\n" + e.getMessage());
             return;
@@ -875,7 +898,8 @@ public class VentasView extends StackPane {
             venta.setPlanCredito(resultado.plan());   // null si no se financió nada
             venta.setFinancieraNombre(resultado.financieraNombre());
             ventaService.finalizar(venta, resultado.pagos());
-            Venta completa = ventaService.detalle(venta.getId());
+            // Una venta hecha sin internet todavía no está en la base: el recibo se arma con lo que ya tenemos.
+            Venta completa = venta.isPendienteDeSubir() ? venta : ventaService.detalle(venta.getId());
             cerrarCobro();
             nuevaVenta();                         // ticket nuevo y limpio
             mostrarAviso(completa, resultado);
@@ -959,13 +983,7 @@ public class VentasView extends StackPane {
             return;
         }
 
-        TextArea area = new TextArea(texto);
-        area.setEditable(false);
-        area.getStyleClass().add("recibo");
-        // Ancho fijo: el recibo tiene 48 caracteres por línea y debe verse completo.
-        area.setPrefWidth(480);
-        area.setMinWidth(480);
-        area.setPrefRowCount(Math.min(26, texto.split("\n").length + 1));
+        javafx.scene.Node area = TicketDialog.vista(texto);   // el mismo recibo que en el historial: con logo y sin marcas
 
         ButtonType imprimir = new ButtonType("Imprimir recibo", ButtonBar.ButtonData.OTHER);
         ButtonType cerrar = new ButtonType("Cerrar", ButtonBar.ButtonData.OK_DONE);

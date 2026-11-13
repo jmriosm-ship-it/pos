@@ -33,7 +33,7 @@ public class ProveedorDAO {
     // LEFT JOIN: un proveedor sin compras también sale (total 0 y sin fecha).
     public List<Proveedor> listarConResumen() throws SQLException {
         String sql = "SELECT p.*, COALESCE(SUM(c.total), 0) AS comprado, MAX(c.fecha) AS ultima "
-                + "FROM proveedores p LEFT JOIN compras c ON c.id_proveedor = p.id "
+                + "FROM proveedores p LEFT JOIN compras c ON c.id_proveedor = p.id AND c.anulada = FALSE "
                 + "WHERE p.activo = TRUE GROUP BY p.id ORDER BY p.nombre";
         List<Proveedor> lista = new ArrayList<>();
 
@@ -52,7 +52,7 @@ public class ProveedorDAO {
         return lista;
     }
 
-    // Inserta un proveedor nuevo y le asigna el id generado por MySQL.
+    // Inserta un proveedor nuevo y le asigna el id generado por la base de datos.
     public void insertar(Proveedor p) throws SQLException {
         String sql = "INSERT INTO proveedores (nombre, telefono, correo, direccion) VALUES (?, ?, ?, ?)";
 

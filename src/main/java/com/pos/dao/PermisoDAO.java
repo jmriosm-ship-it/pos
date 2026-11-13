@@ -17,6 +17,14 @@ public class PermisoDAO {
 
     // Todos los permisos de una vez: nombre del rol -> módulos que puede ver.
     public Map<String, Set<Modulo>> cargarTodos() throws SQLException {
+        try {
+            return cargarTodosDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.permisos();
+        }
+    }
+
+    private Map<String, Set<Modulo>> cargarTodosDb() throws SQLException {
         String sql = "SELECT r.nombre, p.modulo FROM permisos_rol p JOIN roles r ON p.id_rol = r.id";
         Map<String, Set<Modulo>> mapa = new HashMap<>();
 
@@ -37,6 +45,14 @@ public class PermisoDAO {
 
     // Las acciones de cada rol: nombre del rol -> claves "MODULO:ACCION".
     public Map<String, Set<String>> cargarAcciones() throws SQLException {
+        try {
+            return cargarAccionesDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.acciones();
+        }
+    }
+
+    private Map<String, Set<String>> cargarAccionesDb() throws SQLException {
         String sql = "SELECT r.nombre, a.modulo, a.accion FROM permisos_accion a JOIN roles r ON a.id_rol = r.id";
         Map<String, Set<String>> mapa = new HashMap<>();
         try (Connection con = Conexion.obtener();
@@ -51,7 +67,7 @@ public class PermisoDAO {
     }
 
     public void agregarAccion(String rol, Modulo modulo, com.pos.modelo.Accion accion) throws SQLException {
-        String sql = "INSERT IGNORE INTO permisos_accion (id_rol, modulo, accion) SELECT id, ?, ? FROM roles WHERE nombre = ?";
+        String sql = "INSERT INTO permisos_accion (id_rol, modulo, accion) SELECT id, ?, ? FROM roles WHERE nombre = ? ON CONFLICT DO NOTHING";
         try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, modulo.name());
             ps.setString(2, accion.name());
@@ -61,8 +77,8 @@ public class PermisoDAO {
     }
 
     public void quitarAccion(String rol, Modulo modulo, com.pos.modelo.Accion accion) throws SQLException {
-        String sql = "DELETE a FROM permisos_accion a JOIN roles r ON a.id_rol = r.id "
-                + "WHERE r.nombre = ? AND a.modulo = ? AND a.accion = ?";
+        String sql = "DELETE FROM permisos_accion a USING roles r WHERE a.id_rol = r.id "
+                + "AND r.nombre = ? AND a.modulo = ? AND a.accion = ?";
         try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, rol);
             ps.setString(2, modulo.name());
@@ -73,7 +89,7 @@ public class PermisoDAO {
 
     // Le da a un rol acceso a un módulo (si ya lo tenía, no pasa nada).
     public void agregar(String rol, Modulo modulo) throws SQLException {
-        String sql = "INSERT IGNORE INTO permisos_rol (id_rol, modulo) SELECT id, ? FROM roles WHERE nombre = ?";
+        String sql = "INSERT INTO permisos_rol (id_rol, modulo) SELECT id, ? FROM roles WHERE nombre = ? ON CONFLICT DO NOTHING";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -85,7 +101,7 @@ public class PermisoDAO {
 
     // Le quita a un rol el acceso a un módulo.
     public void quitar(String rol, Modulo modulo) throws SQLException {
-        String sql = "DELETE p FROM permisos_rol p JOIN roles r ON p.id_rol = r.id WHERE r.nombre = ? AND p.modulo = ?";
+        String sql = "DELETE FROM permisos_rol p USING roles r WHERE p.id_rol = r.id AND r.nombre = ? AND p.modulo = ?";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql)) {

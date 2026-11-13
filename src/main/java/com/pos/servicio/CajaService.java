@@ -27,14 +27,48 @@ public class CajaService {
         caja.setIdUsuario(usuario.getId());
         caja.setMontoInicial(montoInicial);
         cajaDAO.abrir(caja);
+        RECUERDOS.remove(usuario.getId());
         caja.setEstado("ABIERTA");
+        com.pos.offline.Sincronizador.pedirRefresco();   // la copia local debe saber que ya hay caja abierta
         return caja;
+    }
+
+    // Los cierres anteriores: el administrador ve los de todas las cajas; los demás, solo los suyos.
+    public java.util.List<CajaDAO.CierreFila> cierresAnteriores(Usuario usuario, int limite) throws SQLException {
+        return cajaDAO.listarCerradas(usuario.esAdmin() ? null : usuario.getId(), limite);
+    }
+
+    // Corrige la base (el monto inicial) de una caja abierta. Solo el administrador; queda en el registro de acciones.
+    public void corregirBase(Usuario quien, Caja caja, BigDecimal nuevoMonto) throws SQLException {
+        if (!quien.esAdmin()) {
+            throw new IllegalStateException("Solo un administrador puede corregir la base de la caja.");
+        }
+        if (nuevoMonto == null || nuevoMonto.signum() < 0) {
+            throw new IllegalArgumentException("El monto no puede ser negativo.");
+        }
+        BigDecimal antes = caja.getMontoInicial();
+        cajaDAO.corregirBase(caja.getId(), nuevoMonto);
+        RECUERDOS.remove(caja.getIdUsuario());
+        AuditoriaService.registrar(quien, "Base de caja corregida", "caja " + caja.getId() + " · de " + antes.toPlainString() + " a " + nuevoMonto.toPlainString());
     }
 
     // Devuelve la caja abierta del usuario, o null si no tiene.
     // Más adelante las ventas usarán esto: sin caja abierta no se puede vender.
+    // La pantalla de ventas pregunta esto muchas veces; cada pregunta a la base cuesta un viaje por internet.
+    // Se recuerda 20 segundos (y se olvida al abrir o cerrar la caja).
+    private record Recuerdo(Caja caja, long hora) {
+    }
+
+    private static final java.util.Map<Integer, Recuerdo> RECUERDOS = new java.util.concurrent.ConcurrentHashMap<>();
+
     public Caja cajaAbierta(Usuario usuario) throws SQLException {
-        return cajaDAO.buscarAbiertaDeUsuario(usuario.getId());
+        Recuerdo r = RECUERDOS.get(usuario.getId());
+        if (r != null && System.currentTimeMillis() - r.hora() < 20_000) {
+            return r.caja();
+        }
+        Caja caja = cajaDAO.buscarAbiertaDeUsuario(usuario.getId());
+        RECUERDOS.put(usuario.getId(), new Recuerdo(caja, System.currentTimeMillis()));
+        return caja;
     }
 
     // Lo que se ha vendido en efectivo en esta caja hasta ahora (para mostrar antes de cerrar).
@@ -83,6 +117,10 @@ public class CajaService {
             throw new IllegalArgumentException("El monto contado no puede ser negativo.");
         }
 
+        if (com.pos.offline.ColaVentas.cantidad() > 0) {
+            throw new IllegalStateException("Hay " + com.pos.offline.ColaVentas.cantidad()
+                    + " venta(s) hechas sin internet que todavía no se han subido. Espera a que se suban para cerrar la caja y que cuadre.");
+        }
         BigDecimal ventasEfectivo = cajaDAO.totalEfectivoVentas(caja.getId());
         BigDecimal esperado = caja.getMontoInicial().add(ventasEfectivo);
 
@@ -90,6 +128,8 @@ public class CajaService {
         caja.setMontoContado(montoContado);
         caja.setDiferencia(montoContado.subtract(esperado));
         cajaDAO.cerrar(caja);
+        RECUERDOS.remove(caja.getIdUsuario());
+        com.pos.offline.Sincronizador.pedirRefresco();
         AuditoriaService.registrar(null, "Caja cerrada", "caja " + caja.getId() + " · contado " + montoContado.toPlainString() + " · dif " + caja.getDiferencia().toPlainString());
         caja.setEstado("CERRADA");
         caja.setCerradaEn(java.time.LocalDateTime.now());   // para el comprobante (la base guardó la hora con NOW())

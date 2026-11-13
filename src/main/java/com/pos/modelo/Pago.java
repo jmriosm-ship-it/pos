@@ -10,7 +10,7 @@ import java.math.BigDecimal;
  * Es un "record": una clase corta que solo guarda datos (Java crea solo el constructor,
  * pago.metodo(), pago.monto() y el toString).
  */
-public record Pago(String metodo, BigDecimal monto) {
+public record Pago(String metodo, BigDecimal monto) implements java.io.Serializable {
 
     // El nombre para mostrar: EFECTIVO -> Efectivo.
     public String etiqueta() {

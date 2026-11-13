@@ -27,8 +27,15 @@ public class ProductoDialog {
 
     private ProductoDialog() {
     }
+    
+    public static Producto ultimoGuardado;   // el último producto guardado con este formulario
 
     public static boolean abrir(Producto original) {
+        return abrir(original, null);
+    }
+
+    // textoInicial: lo que se buscó y no existía; se pone en el código o en el nombre.
+    public static boolean abrir(Producto original, String textoInicial) {
         boolean nuevo = original == null;
         ProductoService servicio = new ProductoService();
 
@@ -58,6 +65,13 @@ public class ProductoDialog {
         if (nuevo) {
             stock.setText("0");
             minimo.setText("0");
+            if (textoInicial != null && !textoInicial.isBlank()) {
+                if (textoInicial.contains(" ") || !textoInicial.matches(".*\\d.*")) {
+                    nombre.setText(textoInicial);   // con espacios o sin números: es un nombre
+                } else {
+                    codigo.setText(textoInicial);   // sin espacios y con números: es un código
+                }
+            }
         } else {
             codigo.setText(original.getCodigo());
             nombre.setText(original.getNombre());
@@ -133,6 +147,7 @@ public class ProductoDialog {
                     p.setColor(original.getColor());
                 }
                 servicio.guardar(p);
+                ultimoGuardado = p;
                 guardado[0] = true;
             } catch (IllegalArgumentException ex) {
                 error.setText(ex.getMessage());

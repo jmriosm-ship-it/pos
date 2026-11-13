@@ -79,7 +79,7 @@ public class DevolucionDAO {
             }
             if ("FIADO".equals(metodo)) {   // el reembolso se descuenta de lo que el cliente debe
                 try (PreparedStatement ps = con.prepareStatement("UPDATE fiados SET "
-                        + "estado = IF(saldo - ? <= 0, 'PAGADO', estado), saldo = GREATEST(0, saldo - ?) "
+                        + "estado = CASE WHEN saldo - ? <= 0 THEN 'PAGADO' ELSE estado END, saldo = GREATEST(0, saldo - ?) "
                         + "WHERE id_venta = ? AND estado = 'PENDIENTE'")) {
                     ps.setBigDecimal(1, monto);
                     ps.setBigDecimal(2, monto);

@@ -14,7 +14,15 @@ import java.util.List;
 public class ProductoDAO {
     //devuelve todos los productos activos, ordenados por nombre.
 
-    public List<Producto> listar() throws SQLException{
+    public List<Producto> listar() throws SQLException {
+        try {
+            return listarDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.productos();
+        }
+    }
+
+    private List<Producto> listarDb() throws SQLException {
         String sql= "SELECT * FROM productos WHERE activo = TRUE ORDER BY nombre";
         List<Producto> Lista = new ArrayList<>();
 
@@ -35,8 +43,38 @@ public class ProductoDAO {
 
     }
 
+    // Igual que buscarPorCodigo, pero desde la copia local si es reciente (el carrito de ventas lo pide en cada producto).
+    // El stock y el precio definitivos se confirman en la base al cobrar.
+    public Producto buscarPorCodigoRapido(String codigo) throws SQLException {
+        if (com.pos.config.Conectividad.enLinea() && com.pos.offline.CacheLocal.fresco(45_000)) {
+            Producto p = com.pos.offline.CacheLocal.productoPorCodigo(codigo);
+            if (p != null) {
+                return p;
+            }
+        }
+        return buscarPorCodigo(codigo);
+    }
+
+    public Producto buscarPorIdRapido(int id) throws SQLException {
+        if (com.pos.config.Conectividad.enLinea() && com.pos.offline.CacheLocal.fresco(45_000)) {
+            Producto p = com.pos.offline.CacheLocal.productoPorId(id);
+            if (p != null) {
+                return p;
+            }
+        }
+        return buscarPorId(id);
+    }
+
     // Busca un producto por su código de barras. Devuelve null si no existe.
     public Producto buscarPorCodigo(String codigo) throws SQLException {
+        try {
+            return buscarPorCodigoDb(codigo);
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.productoPorCodigo(codigo);
+        }
+    }
+
+    private Producto buscarPorCodigoDb(String codigo) throws SQLException {
         String sql = "SELECT * FROM productos WHERE codigo = ? AND activo = TRUE";
 
         try (Connection con = Conexion.obtener();
@@ -55,14 +93,14 @@ public class ProductoDAO {
         return null;
     }
 
-    // Inserta un producto nuevo y le asigna al objeto el id que generó MySQL.
+    // Inserta un producto nuevo y le asigna al objeto el id que generó la base de datos.
     public void insertar(Producto p) throws SQLException {
         String sql = "INSERT INTO productos "
                 + "(codigo, nombre, id_categoria, id_proveedor, precio_compra, precio_venta, stock, stock_minimo, "
                 + "marca, condicion, garantia_dias, por_imei, capacidad, color) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        // RETURN_GENERATED_KEYS: pide a MySQL que nos devuelva el id nuevo.
+        // RETURN_GENERATED_KEYS: pide a la base de datos que nos devuelva el id nuevo.
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
@@ -180,6 +218,14 @@ public class ProductoDAO {
 
     // Busca un producto por su id. Devuelve null si no existe.
     public Producto buscarPorId(int id) throws SQLException {
+        try {
+            return buscarPorIdDb(id);
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.productoPorId(id);
+        }
+    }
+
+    private Producto buscarPorIdDb(int id) throws SQLException {
         String sql = "SELECT * FROM productos WHERE id = ?";
 
         try (Connection con = Conexion.obtener();
@@ -212,7 +258,15 @@ public class ProductoDAO {
     // Busca productos activos por parte del nombre o del código (para el buscador del POS).
     // LIKE '%texto%' = "que contenga el texto en cualquier parte".
     public List<Producto> buscar(String texto) throws SQLException {
-        String sql = "SELECT * FROM productos WHERE activo = TRUE AND (nombre LIKE ? OR codigo LIKE ? OR marca LIKE ? OR id IN (SELECT id_producto FROM producto_imeis WHERE imei LIKE ?)) "
+        try {
+            return buscarDb(texto);
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.buscarProductos(texto, 50);
+        }
+    }
+
+    private List<Producto> buscarDb(String texto) throws SQLException {
+        String sql = "SELECT * FROM productos WHERE activo = TRUE AND (nombre ILIKE ? OR codigo ILIKE ? OR marca ILIKE ? OR id IN (SELECT id_producto FROM producto_imeis WHERE imei ILIKE ?)) "
                 + "ORDER BY nombre LIMIT 50";
         List<Producto> lista = new ArrayList<>();
 

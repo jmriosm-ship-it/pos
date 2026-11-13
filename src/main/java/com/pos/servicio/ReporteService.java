@@ -1,5 +1,6 @@
 package com.pos.servicio;
 
+import com.pos.util.Paralelo;
 import com.pos.dao.GastoDAO;
 import com.pos.dao.ReporteDAO;
 import com.pos.modelo.ProductoVendido;
@@ -24,19 +25,31 @@ public class ReporteService {
             throw new IllegalArgumentException("La fecha final no puede ser anterior a la inicial.");
         }
 
-        Object[] totales = reporteDAO.ventasTotales(desde, hasta);
+        // Las 11 consultas son independientes: se hacen al mismo tiempo (la base está en internet y cada una tarda).
+        var fTotales = Paralelo.lanzar(() -> reporteDAO.ventasTotales(desde, hasta));
+        var fDev = Paralelo.lanzar(() -> reporteDAO.devoluciones(desde, hasta));
+        var fFinVendida = Paralelo.lanzar(() -> reporteDAO.financieraVendida(desde, hasta));
+        var fFinCobrada = Paralelo.lanzar(() -> reporteDAO.financieraCobrada(desde, hasta));
+        var fCosto = Paralelo.lanzar(() -> reporteDAO.costoVendido(desde, hasta));
+        var fCostoDev = Paralelo.lanzar(() -> reporteDAO.costoDevuelto(desde, hasta));
+        var fFinCostoV = Paralelo.lanzar(() -> reporteDAO.financieraCostoVendido(desde, hasta));
+        var fFinCostoC = Paralelo.lanzar(() -> reporteDAO.financieraCostoCobrado(desde, hasta));
+        var fGastos = Paralelo.lanzar(() -> gastoDAO.total(desde, hasta));
+        var fIntereses = Paralelo.lanzar(() -> reporteDAO.interesesCobrados(desde, hasta));
+
+        Object[] totales = Paralelo.esperar(fTotales);
         int numeroVentas = (Integer) totales[0];
         // Ingresos y costo ya sin lo que se devolvió a los clientes.
         // La parte que paga una financiera cuenta cuando la financiera paga, no el día de la venta.
-        BigDecimal ingresos = ((BigDecimal) totales[1]).subtract(reporteDAO.devoluciones(desde, hasta))
-                .subtract(reporteDAO.financieraVendida(desde, hasta)).add(reporteDAO.financieraCobrada(desde, hasta));
+        BigDecimal ingresos = ((BigDecimal) totales[1]).subtract(Paralelo.esperar(fDev))
+                .subtract(Paralelo.esperar(fFinVendida)).add(Paralelo.esperar(fFinCobrada));
 
-        BigDecimal costo = reporteDAO.costoVendido(desde, hasta).subtract(reporteDAO.costoDevuelto(desde, hasta))
-                .subtract(reporteDAO.financieraCostoVendido(desde, hasta)).add(reporteDAO.financieraCostoCobrado(desde, hasta))
+        BigDecimal costo = Paralelo.esperar(fCosto).subtract(Paralelo.esperar(fCostoDev))
+                .subtract(Paralelo.esperar(fFinCostoV)).add(Paralelo.esperar(fFinCostoC))
                 .setScale(0, RoundingMode.HALF_UP);
         BigDecimal gananciaBruta = ingresos.subtract(costo);
-        BigDecimal gastos = gastoDAO.total(desde, hasta);
-        BigDecimal intereses = reporteDAO.interesesCobrados(desde, hasta).setScale(0, RoundingMode.HALF_UP);
+        BigDecimal gastos = Paralelo.esperar(fGastos);
+        BigDecimal intereses = Paralelo.esperar(fIntereses).setScale(0, RoundingMode.HALF_UP);
         // ganancia neta = bruta + intereses de créditos cobrados - gastos
         BigDecimal gananciaNeta = gananciaBruta.add(intereses).subtract(gastos);
 

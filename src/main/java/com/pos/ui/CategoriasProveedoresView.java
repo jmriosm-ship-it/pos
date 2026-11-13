@@ -9,8 +9,8 @@ public class CategoriasProveedoresView extends TabPane {
     public CategoriasProveedoresView() {
         // Las pestañas no se pueden cerrar (por defecto JavaFX les pone una X).
         setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
-        getTabs().addAll(
-                new Tab("Categorías", new CategoriasPanel()),
-                new Tab("Proveedores", new ProveedoresPanel()));
+        Tab pProveedores = new Tab("Proveedores");
+        getTabs().addAll(new Tab("Categorías", new CategoriasPanel()), pProveedores);
+        new Perezosa<ProveedoresPanel>(ProveedoresPanel::new).enPestana(pProveedores, null);   // se lee al abrir esa pestaña
     }
 }

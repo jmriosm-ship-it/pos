@@ -13,6 +13,14 @@ public class UsuarioDAO {
     // Busca un usuario por su nombre de usuario (el que escribe para entrar).
     // JOIN con roles: así traemos también el texto del rol (ADMIN, CAJERO...).
     public Usuario buscarPorUsuario(String usuario) throws SQLException {
+        try {
+            return buscarPorUsuarioDb(usuario);
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.usuario(usuario);
+        }
+    }
+
+    private Usuario buscarPorUsuarioDb(String usuario) throws SQLException {
         String sql = "SELECT u.*, r.nombre AS rol "
                 + "FROM usuarios u JOIN roles r ON u.id_rol = r.id "
                 + "WHERE u.usuario = ?";
@@ -32,7 +40,7 @@ public class UsuarioDAO {
                     u.setIdRol(rs.getInt("id_rol"));
                     u.setRol(rs.getString("rol"));
                     u.setActivo(rs.getBoolean("activo"));
-                    extras(u, rs);
+                    extras(u, rs, con);
                     return u;
                 }
             }
@@ -42,6 +50,14 @@ public class UsuarioDAO {
 
     // Lista todos los usuarios (con el texto de su rol), ordenados por nombre.
     public java.util.List<Usuario> listar() throws SQLException {
+        try {
+            return listarDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.usuarios();
+        }
+    }
+
+    private java.util.List<Usuario> listarDb() throws SQLException {
         String sql = "SELECT u.*, r.nombre AS rol FROM usuarios u JOIN roles r ON u.id_rol = r.id ORDER BY u.nombre";
         java.util.List<Usuario> lista = new java.util.ArrayList<>();
 
@@ -57,7 +73,7 @@ public class UsuarioDAO {
                 u.setIdRol(rs.getInt("id_rol"));
                 u.setRol(rs.getString("rol"));
                 u.setActivo(rs.getBoolean("activo"));
-                extras(u, rs);
+                extras(u, rs, con);
                 lista.add(u);
             }
         }
@@ -97,15 +113,14 @@ public class UsuarioDAO {
     }
 
     // Lee lo que se agregó después: cupo, pago por día, permisos propios y pantallas extra.
-    private void extras(Usuario u, ResultSet rs) throws SQLException {
+    private void extras(Usuario u, ResultSet rs, Connection con) throws SQLException {
         u.setCupo(rs.getBigDecimal("cupo"));
         u.setPagoDia(rs.getBigDecimal("pago_dia"));
         u.setPuedeAnular(rs.getBoolean("puede_anular"));
         u.setDescuentoMax(rs.getInt("descuento_max"));
         u.setPuedeEditarProductos(rs.getBoolean("puede_editar_productos"));
         java.util.Set<com.pos.modelo.Modulo> extra = java.util.EnumSet.noneOf(com.pos.modelo.Modulo.class);
-        try (Connection con = Conexion.obtener();
-             PreparedStatement ps = con.prepareStatement("SELECT modulo FROM usuario_modulos WHERE id_usuario = ?")) {
+        try (PreparedStatement ps = con.prepareStatement("SELECT modulo FROM usuario_modulos WHERE id_usuario = ?")) {
             ps.setInt(1, u.getId());
             try (ResultSet r2 = ps.executeQuery()) {
                 while (r2.next()) {

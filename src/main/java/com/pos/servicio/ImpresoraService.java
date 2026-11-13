@@ -37,14 +37,41 @@ public class ImpresoraService {
             throw new IllegalStateException("No se encontró la impresora. Revisa la configuración.");
         }
 
+        boolean papel58 = "58".equals(config.obtener(ConfiguracionService.IMPRESORA_ANCHO_MM, "80"));
+        DocPrintJob trabajo = impresora.createPrintJob();
+        trabajo.print(new SimpleDoc(armarDatos(texto, papel58), DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);
+    }
+
+    // Convierte el recibo (texto con las marcas de ReciboService) en los bytes que entiende la impresora:
+    // el logo como imagen, las líneas grandes con su tamaño y el resto como texto normal.
+    byte[] armarDatos(String texto, boolean papel58) {
+        Charset cp850 = Charset.forName("Cp850");                       // Cp850 trae tildes y la ñ
         ByteArrayOutputStream datos = new ByteArrayOutputStream();
         datos.writeBytes(new byte[]{0x1B, 0x40});                       // ESC @  = reiniciar impresora
-        datos.writeBytes(texto.getBytes(Charset.forName("Cp850")));     // Cp850 trae tildes y la ñ
+        String[] lineas = texto.split("\n", -1);
+        for (int i = 0; i < lineas.length; i++) {
+            String l = lineas[i];
+            if (i == lineas.length - 1 && l.isEmpty()) {
+                break;                                                  // el texto termina en salto de línea
+            }
+            char marca = l.isEmpty() ? 0 : l.charAt(0);
+            if (marca == ReciboService.LOGO) {
+                datos.writeBytes(LogoRecibo.escpos(papel58 ? 160 : 240));
+                continue;
+            }
+            if (marca == ReciboService.GRANDE || marca == ReciboService.MUY_GRANDE) {
+                // ESC ! n: 0x08 negrita, 0x10 doble alto, 0x20 doble ancho
+                datos.writeBytes(new byte[]{0x1B, 0x21, (byte) (marca == ReciboService.GRANDE ? 0x18 : 0x38)});
+                datos.writeBytes(l.substring(1).getBytes(cp850));
+                datos.writeBytes(new byte[]{0x1B, 0x21, 0x00, '\n'});
+                continue;
+            }
+            datos.writeBytes(l.getBytes(cp850));
+            datos.write('\n');
+        }
         datos.writeBytes(new byte[]{'\n', '\n', '\n', '\n'});           // espacio para poder rasgar
         datos.writeBytes(new byte[]{0x1D, 0x56, 0x42, 0x00});           // GS V B 0 = cortar el papel
-
-        DocPrintJob trabajo = impresora.createPrintJob();
-        trabajo.print(new SimpleDoc(datos.toByteArray(), DocFlavor.BYTE_ARRAY.AUTOSENSE, null), null);
+        return datos.toByteArray();
     }
 
     // Busca la impresora por nombre; si el nombre está vacío usa la predeterminada.

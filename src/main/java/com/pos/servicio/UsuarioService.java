@@ -89,5 +89,8 @@ public class UsuarioService {
         if (clave == null || clave.length() < 6) {
             throw new IllegalArgumentException("La clave debe tener al menos 6 caracteres.");
         }
+        if (AutenticacionService.CLAVE_INICIAL.equals(clave)) {
+            throw new IllegalArgumentException("Esa es la clave inicial del sistema; elige otra.");
+        }
     }
 }

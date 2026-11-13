@@ -51,13 +51,104 @@ public class ProductosView extends VBox {
         contador.getStyleClass().add("texto-suave");
         javafx.scene.layout.Region espacio = new javafx.scene.layout.Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox barra = new HBox(10, buscador, contador, espacio, editar, desactivar, nuevo);
+        Button exportar = new Button("Exportar CSV");
+        exportar.getStyleClass().add("btn-secundario");
+        exportar.setGraphic(Atajos.tecla("F9"));
+        exportar.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
+        exportar.setGraphicTextGap(8);
+        exportar.setFocusTraversable(false);
+        exportar.setOnAction(e -> exportarCsv());
+        Button importar = new Button("Importar CSV");
+        importar.getStyleClass().add("btn-secundario");
+        importar.setGraphic(Atajos.tecla("F10"));
+        importar.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
+        importar.setGraphicTextGap(8);
+        importar.setFocusTraversable(false);
+        importar.setOnAction(e -> importarCsv());
+        HBox barra = new HBox(10, buscador, contador, espacio, exportar, importar, editar, desactivar, nuevo);
         barra.setAlignment(Pos.CENTER_LEFT);
+        sceneProperty().addListener((o, antigua, nueva) -> {
+            if (antigua != null) {
+                antigua.removeEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, teclasCsv);
+            }
+            if (nueva != null) {
+                nueva.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, teclasCsv);
+            }
+        });
 
         configurarTabla();
         VBox.setVgrow(tabla, Priority.ALWAYS);
         getChildren().addAll(barra, tabla);
         cargar();
+    }
+
+    // F9 exportar · F10 importar (solo con esta pantalla a la vista).
+    private final javafx.event.EventHandler<javafx.scene.input.KeyEvent> teclasCsv = e -> {
+        if (!Atajos.visible(this)) {
+            return;
+        }
+        if (e.getCode() == javafx.scene.input.KeyCode.F9) {
+            exportarCsv();
+            e.consume();
+        } else if (e.getCode() == javafx.scene.input.KeyCode.F10) {
+            importarCsv();
+            e.consume();
+        }
+    };
+
+    // Guarda todos los productos en un archivo que se abre con Excel (también sirve de modelo para importar).
+    private void exportarCsv() {
+        javafx.stage.FileChooser selector = new javafx.stage.FileChooser();
+        selector.setTitle("Guardar los productos");
+        selector.setInitialFileName("productos_" + java.time.LocalDate.now() + ".csv");
+        selector.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("Archivo para Excel (*.csv)", "*.csv"));
+        java.io.File archivo = selector.showSaveDialog(getScene().getWindow());
+        if (archivo == null) {
+            return;
+        }
+        try {
+            int n = new com.pos.servicio.ProductoCsvService().exportar(archivo.toPath());
+            Mensajes.info("Productos guardados", (n == 0 ? "Se guardó un archivo de ejemplo (aún no hay productos)." : n + " productos guardados.")
+                    + "\nEl archivo quedó en:\n" + archivo.getAbsolutePath()
+                    + "\n\nÁbrelo con Excel, agrega o cambia productos y vuelve a subirlo con Importar CSV.");
+        } catch (Exception ex) {
+            Mensajes.error("No se pudo guardar el archivo.\n" + ex.getMessage());
+        }
+    }
+
+    // Carga productos desde un archivo CSV: crea los nuevos y actualiza los que ya existen (por código).
+    private void importarCsv() {
+        if (!Seguridad.permitido(Modulo.PRODUCTOS, Accion.CREAR, "importar productos")) {
+            return;
+        }
+        javafx.stage.FileChooser selector = new javafx.stage.FileChooser();
+        selector.setTitle("Elegir el archivo de productos");
+        selector.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("Archivo para Excel (*.csv)", "*.csv"));
+        java.io.File archivo = selector.showOpenDialog(getScene().getWindow());
+        if (archivo == null) {
+            return;
+        }
+        if (!Mensajes.confirmar("Importar productos", "Se van a crear los productos nuevos y actualizar los que ya existan "
+                + "(por código).\nEl stock de los que ya existen no se cambia.\n\n¿Seguir con \"" + archivo.getName() + "\"?")) {
+            return;
+        }
+        try {
+            var r = new com.pos.servicio.ProductoCsvService().importar(archivo.toPath());
+            cargar();
+            StringBuilder texto = new StringBuilder(r.creados() + " productos nuevos · " + r.actualizados() + " actualizados");
+            if (!r.errores().isEmpty()) {
+                texto.append("\n\n").append(r.errores().size()).append(" filas con problema (no se cargaron):");
+                r.errores().stream().limit(12).forEach(x -> texto.append("\n• ").append(x));
+                if (r.errores().size() > 12) {
+                    texto.append("\n… y ").append(r.errores().size() - 12).append(" más.");
+                }
+            }
+            Mensajes.info("Importación terminada", texto.toString());
+        } catch (IllegalArgumentException ex) {
+            Mensajes.error(ex.getMessage());
+        } catch (Exception ex) {
+            Mensajes.error("No se pudo importar el archivo.\n" + ex.getMessage());
+        }
     }
 
     private void configurarTabla() {

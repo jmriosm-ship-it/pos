@@ -3,7 +3,9 @@ package com.pos.modelo;
 import java.math.BigDecimal;
 import java.util.function.BiFunction;
 
-public class DetalleVenta {
+public class DetalleVenta implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
     //crear con clase private id, idVenta, idProducto, nombreProducto, cantidad, precioUnit, costoUnit los dos ultimo con BigDecimal
     private int id;
     private int idVenta;

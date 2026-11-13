@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Venta {
+public class Venta implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+
 
     private int id;
     private int idCaja; //en que turno de caja se hizo
@@ -33,6 +35,8 @@ public class Venta {
     private String nombreCliente;
     private String nombreUsuario;
     private int unidades;        // total de unidades vendidas (solo para el historial)
+    private boolean pendienteDeSubir;   // true = se vendió sin conexión y todavía está guardada solo en este PC
+    private String origenOffline;       // identificador único de una venta hecha sin conexión (evita subirla dos veces)
 
     private List<DetalleVenta> detalles = new ArrayList<>();
 
@@ -53,6 +57,11 @@ public class Venta {
         subtotal = suma;
         total = subtotal.subtract(descuentoPromo).subtract(descuento).subtract(descuentoPuntos);
     }
+
+    public String getOrigenOffline() { return origenOffline; }
+    public void setOrigenOffline(String origenOffline) { this.origenOffline = origenOffline; }
+    public boolean isPendienteDeSubir() { return pendienteDeSubir; }
+    public void setPendienteDeSubir(boolean pendienteDeSubir) { this.pendienteDeSubir = pendienteDeSubir; }
 
     public int getId() {
         return id;

@@ -66,6 +66,7 @@
 .chip { -fx-padding: 4 12; -fx-background-radius: 20; -fx-font-size: 12px; -fx-font-weight: bold; }
 .chip-ok { -fx-background-color: #dcfce7; -fx-text-fill: #166534; }
 .chip-off { -fx-background-color: #fee2e2; -fx-text-fill: #991b1b; }
+.chip-aviso { -fx-background-color: #fef3c7; -fx-text-fill: #92400e; }
 
 /* ---------- Tarjetas ---------- */
 .card {

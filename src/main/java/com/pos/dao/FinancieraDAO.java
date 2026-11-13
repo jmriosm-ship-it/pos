@@ -58,6 +58,14 @@ public class FinancieraDAO {
 
     // Los nombres de financiera ya usados (para sugerirlos al cobrar).
     public List<String> nombres() throws SQLException {
+        try {
+            return nombresDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    private List<String> nombresDb() throws SQLException {
         List<String> lista = new ArrayList<>();
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement("SELECT DISTINCT financiera_nombre FROM ventas WHERE financiera_nombre IS NOT NULL ORDER BY 1");

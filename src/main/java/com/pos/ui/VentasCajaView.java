@@ -76,6 +76,15 @@ public class VentasCajaView extends VBox {
         });
     }
 
+    // Sin internet no se puede ver el historial ni mover la caja: se avisa y se queda en la venta.
+    private boolean sinConexionAvisar() {
+        if (com.pos.config.Conectividad.enLinea()) {
+            return false;
+        }
+        Mensajes.info("Sin conexión", "Sin internet solo se puede vender.\nEsto vuelve a estar disponible cuando regrese la conexión.");
+        return true;
+    }
+
     private Caja cajaAbierta() {
         try {
             return cajaService.cajaAbierta(usuario);
@@ -87,6 +96,9 @@ public class VentasCajaView extends VBox {
     // ---------------------------------------------------------------- pantallas
 
     private void mostrarHistorial() {
+        if (sinConexionAvisar()) {
+            return;
+        }
         enCaja = false;
         enHistorial = true;
         Button volver = new Button("←  Volver a la venta");
@@ -111,6 +123,17 @@ public class VentasCajaView extends VBox {
     }
 
     private void mostrarCaja() {
+        if (!com.pos.config.Conectividad.enLinea()) {
+            if (cajaAbierta() == null) {
+                Label sin = new Label("Sin conexión a internet: no se puede abrir la caja ahora.\nCuando regrese la conexión podrás abrirla y vender.");
+                sin.getStyleClass().add("texto-suave");
+                contenido.getChildren().setAll(sin);
+                pintarBarra();
+            } else {
+                sinConexionAvisar();
+            }
+            return;
+        }
         enCaja = true;
         enHistorial = false;
         CajaView caja = new CajaView(this::cajaCambio);
@@ -149,6 +172,7 @@ public class VentasCajaView extends VBox {
         Button menu = boton("☰  Menú", "Ctrl+B", "btn-secundario", alternarMenu);
         Label estado = new Label(caja == null ? "CAJA CERRADA" : "CAJA ABIERTA");
         estado.getStyleClass().addAll("chip", caja == null ? "chip-off" : "chip-ok");
+        estado.setMinWidth(Region.USE_PREF_SIZE);
         String nombre = "Caja 1";
         try {
             nombre = new ConfiguracionService().obtener(ConfiguracionService.CAJA_NOMBRE, "Caja 1");
@@ -157,16 +181,23 @@ public class VentasCajaView extends VBox {
         }
         Label lblNombre = new Label(nombre);
         lblNombre.getStyleClass().add("linea-nombre");
-        barra.getChildren().addAll(menu, estado, lblNombre);
+        lblNombre.setMinWidth(Region.USE_PREF_SIZE);
+        barra.getChildren().addAll(menu, estado, lblNombre, BannerConexion.crear());
         if (caja != null) {
             Label desde = new Label("desde " + caja.getAbiertoEn().format(DateTimeFormatter.ofPattern("HH:mm"))
                     + "  ·  inicio " + Dinero.formato(caja.getMontoInicial()));
             desde.getStyleClass().add("texto-suave");
+            desde.setMinWidth(Region.USE_PREF_SIZE);
             barra.getChildren().add(desde);
         }
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
         barra.getChildren().add(espacio);
+        // Lo del sueldo y el cupo, a la mano en la caja (como en el otro POS): cualquiera saca de su cupo; el admin paga el sueldo.
+        barra.getChildren().add(boton("Sacar cupo", "Ctrl+U", "btn-secundario", () -> SacarCupoDialog.abrir(null)));
+        if (usuario.esAdmin()) {
+            barra.getChildren().add(boton("Pagar sueldo", "Ctrl+M", "btn-secundario", () -> PagarSueldoDialog.abrir(null)));
+        }
         if (caja != null && hayCaja) {
             barra.getChildren().add(boton("Historial", "F11", "btn-secundario", this::mostrarHistorial));
             barra.getChildren().add(boton("Movimientos", "F7", "btn-secundario", this::mostrarCaja));

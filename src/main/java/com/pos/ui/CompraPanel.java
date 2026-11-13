@@ -79,6 +79,11 @@ public class CompraPanel extends VBox {
     private final TableView<Linea> tabla = new TableView<>(lineas);
     private final Label lblTotal = new Label();
     private final Label lblResumen = new Label();
+    private final TextField pagoInicial = CamposDinero.compacto();
+    private final ComboBox<String> medioPago = new ComboBox<>();
+    private final Label lblDebe = new Label();
+    private boolean pagoEditado = false;       // true si quien compra cambió el pago a mano (si no, se paga completo)
+    private boolean ajustandoPago = false;
     private final Button confirmar = new Button("Confirmar compra");
     private final HBox aviso = new HBox(12);
 
@@ -200,7 +205,14 @@ public class CompraPanel extends VBox {
 
         VBox colProducto = campo("Producto", Atajos.tecla("F2"), new VBox(4, buscador, sugerencias));
         HBox.setHgrow(colProducto, Priority.ALWAYS);
-        HBox entrada = new HBox(10, colProducto, campo("Cantidad", null, cantidad), campo("Costo por unidad", null, costo));
+        Button agregar = new Button("Agregar");
+        agregar.getStyleClass().add("btn-secundario");
+        agregar.setGraphic(Atajos.tecla("Enter"));
+        agregar.setContentDisplay(ContentDisplay.RIGHT);
+        agregar.setFocusTraversable(false);
+        agregar.setOnAction(e -> agregarLinea());
+        VBox colAgregar = campo(" ", null, agregar);
+        HBox entrada = new HBox(10, colProducto, campo("Cantidad", null, cantidad), campo("Costo por unidad", null, costo), colAgregar);
         entrada.setAlignment(Pos.TOP_LEFT);
 
         lblElegido.getStyleClass().add("texto-suave");
@@ -228,7 +240,7 @@ public class CompraPanel extends VBox {
 
         FlowPane teclas = new FlowPane(14, 4, Atajos.etiqueta("F2", "Producto"), Atajos.etiqueta("F3", "Proveedor"),
                 Atajos.etiqueta("Supr", "Quitar línea"), Atajos.etiqueta("Esc", "Cancelar la línea"),
-                Atajos.etiqueta("F12", "Confirmar"));
+                Atajos.etiqueta("Enter", "Agregar la línea"), Atajos.etiqueta("F4", "Pago"), Atajos.etiqueta("F12", "Confirmar"));
 
         VBox columna = new VBox(10, cardProveedor, cardEntrada, tabla, teclas);
         HBox.setHgrow(columna, Priority.ALWAYS);
@@ -260,9 +272,23 @@ public class CompraPanel extends VBox {
         confirmar.setFocusTraversable(false);
         confirmar.setOnAction(e -> confirmar());
 
+        Label etPago = new Label("Pago al proveedor ahora");
+        etPago.getStyleClass().add("etiqueta-campo");
+        pagoInicial.setPromptText("0");
+        pagoInicial.textProperty().addListener((o, antes, ahora) -> {
+            if (!ajustandoPago) {
+                pagoEditado = true;   // lo cambió a mano: ya no se vuelve a poner el total
+            }
+            actualizarDebe();
+        });
+        medioPago.getItems().addAll("Transferencia", "Efectivo (sale de la caja)", "Tarjeta");
+        medioPago.getSelectionModel().selectFirst();
+        medioPago.setMaxWidth(Double.MAX_VALUE);
+        lblDebe.getStyleClass().add("texto-suave");
+        VBox bloquePago = new VBox(4, new HBox(6, etPago, Atajos.tecla("F4")), pagoInicial, medioPago, lblDebe);
         Region relleno = new Region();
         VBox.setVgrow(relleno, Priority.ALWAYS);
-        VBox resumen = new VBox(8, etiqueta, lblTotal, lblResumen, relleno, confirmar);
+        VBox resumen = new VBox(8, etiqueta, lblTotal, lblResumen, bloquePago, relleno, confirmar);
         resumen.getStyleClass().add("card");
         resumen.setPrefWidth(300);
         resumen.setMinWidth(300);
@@ -280,6 +306,8 @@ public class CompraPanel extends VBox {
             if (actual != null) {
                 comboProveedor.getItems().stream().filter(p -> p.getId() == actual.getId()).findFirst()
                         .ifPresent(comboProveedor::setValue);
+            } else if (comboProveedor.getItems().size() == 1) {
+                comboProveedor.setValue(comboProveedor.getItems().get(0));   // con un solo proveedor, ya viene elegido
             }
         } catch (SQLException e) {
             Mensajes.error("No se pudieron cargar los proveedores.\n" + e.getMessage());
@@ -288,6 +316,8 @@ public class CompraPanel extends VBox {
 
     // Lo llama Existencias al pulsar "Comprar": deja el producto listo para poner la cantidad.
     public void agregarDesdeExistencias(Producto p) {
+        cantidad.clear();
+        costo.clear();
         elegir(p);
     }
 
@@ -324,10 +354,31 @@ public class CompraPanel extends VBox {
                 sugerencias.requestFocus();
                 sugerencias.getSelectionModel().selectFirst();
             } else {
-                lblError.setText("No se encontró ese producto.");
+                crearProductoNuevo(texto);
             }
         } catch (SQLException e) {
             Mensajes.error("No se pudo buscar el producto.\n" + e.getMessage());
+        }
+    }
+
+    // El producto no existe: se ofrece crearlo y, al guardarlo, queda elegido para esta compra.
+    private void crearProductoNuevo(String texto) {
+        if (!Seguridad.permitido(Modulo.PRODUCTOS, Accion.CREAR, "crear productos")) {
+            return;
+        }
+        if (!Mensajes.confirmar("Producto nuevo", "No existe \"" + texto + "\".\n¿Quieres crearlo ahora?")) {
+            return;
+        }
+        if (!ProductoDialog.abrir(null, texto)) {
+            return;
+        }
+        try {
+            Producto nuevo = productoDAO.buscarPorCodigo(ProductoDialog.ultimoGuardado.getCodigo());
+            if (nuevo != null) {
+                elegir(nuevo);
+            }
+        } catch (SQLException e) {
+            Mensajes.error("No se pudo abrir el producto nuevo.\n" + e.getMessage());
         }
     }
 
@@ -341,18 +392,46 @@ public class CompraPanel extends VBox {
         sugerencias.setManaged(false);
         lblError.setText("");
         lblElegido.setText(p.getCodigo() + "  ·  stock actual " + p.getStock() + "  ·  último costo " + Dinero.formato(p.getPrecioCompra()));
-        cantidad.clear();
-        costo.setText(Dinero.plano(p.getPrecioCompra()));   // el último costo ya viene escrito; se puede cambiar
+        // Lo que ya escribiste en cantidad y costo se conserva; si estaban vacíos, el costo trae el último que se pagó.
+        if (costo.getText().isBlank()) {
+            costo.setText(Dinero.plano(p.getPrecioCompra()));
+        }
+        boolean faltaCantidad = cantidad.getText().isBlank();
         Platform.runLater(() -> {
-            cantidad.requestFocus();
-            cantidad.selectAll();
+            if (faltaCantidad) {
+                cantidad.requestFocus();
+                cantidad.selectAll();
+            } else {
+                costo.requestFocus();
+                costo.selectAll();
+            }
         });
+    }
+
+    // Lo llama "Por reponer": deja el producto elegido y la cantidad sugerida ya escrita.
+    public void agregarDesdeExistencias(Producto p, int cantidadSugerida) {
+        cantidad.clear();
+        costo.clear();
+        elegir(p);
+        if (cantidadSugerida > 0) {
+            cantidad.setText(String.valueOf(cantidadSugerida));
+            Platform.runLater(() -> {
+                costo.requestFocus();
+                costo.selectAll();
+            });
+        }
     }
 
     // Enter en el costo: agrega la línea (si el producto ya estaba, suma la cantidad y deja el costo nuevo).
     private void agregarLinea() {
+        // Si escribiste el nombre pero no lo elegiste de la lista, se busca solo (y se respeta la cantidad y el costo escritos).
+        if (elegido == null && !buscador.getText().isBlank()) {
+            alEnterEnProducto();
+        }
         if (elegido == null) {
-            lblError.setText("Primero elige un producto.");
+            lblError.setText(sugerencias.getItems().size() > 1
+                    ? "Hay varios productos con ese nombre: elige uno de la lista."
+                    : "Primero elige un producto.");
             buscador.requestFocus();
             return;
         }
@@ -416,7 +495,32 @@ public class CompraPanel extends VBox {
         lblTotal.setText(Dinero.formato(total));
         lblResumen.setText(lineas.size() + (lineas.size() == 1 ? " producto" : " productos") + "  ·  " + unidades
                 + (unidades == 1 ? " unidad" : " unidades"));
-        confirmar.setDisable(lineas.isEmpty());
+        if (!pagoEditado) {
+            ajustandoPago = true;
+            pagoInicial.setText(total.signum() == 0 ? "" : Dinero.plano(total));
+            ajustandoPago = false;
+        }
+        actualizarDebe();
+    }
+
+    // "Queda debiendo" al proveedor según el total y lo que se paga ahora.
+    private void actualizarDebe() {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Linea l : lineas) {
+            total = total.add(l.subtotal());
+        }
+        BigDecimal pago = CamposDinero.valor(pagoInicial);
+        if (pago.compareTo(total) > 0) {
+            lblDebe.setText("El pago no puede pasar del total.");
+        } else {
+            BigDecimal debe = total.subtract(pago);
+            lblDebe.setText(debe.signum() == 0 ? "Compra pagada completa." : "Queda debiendo: " + Dinero.formato(debe));
+        }
+    }
+
+    // Si ya escribiste producto, cantidad y costo pero no pulsaste Agregar, esa línea se agrega sola al confirmar.
+    private boolean hayLineaPendiente() {
+        return elegido != null && !cantidad.getText().isBlank();
     }
 
     // ---------------------------------------------------------------- confirmar
@@ -426,14 +530,25 @@ public class CompraPanel extends VBox {
             return;
         }
         if (comboProveedor.getValue() == null) {
-            Mensajes.error("Elige el proveedor (F3) antes de confirmar la compra.");
+            Mensajes.error("Elige el proveedor (F3) antes de confirmar la compra.\nSi aún no tienes proveedores, créalos en Categorías y proveedores.");
+            comboProveedor.requestFocus();
             return;
         }
+        if (hayLineaPendiente()) {
+            agregarLinea();
+            if (hayLineaPendiente()) {
+                return;   // la línea tenía un error (por ejemplo, costo en cero) y ya se avisó
+            }
+        }
         if (lineas.isEmpty()) {
+            Mensajes.info("Faltan productos", "Agrega al menos un producto: elige el producto, escribe la cantidad y el costo, y pulsa Agregar (o Enter).");
             return;
         }
         try {
             Compra compra = compraService.nuevaCompra(usuario, comboProveedor.getValue());
+            compra.setPagado(CamposDinero.valor(pagoInicial));
+            compra.setMetodoPago(medioPago.getSelectionModel().getSelectedIndex() == 1 ? "EFECTIVO"
+                    : medioPago.getSelectionModel().getSelectedIndex() == 2 ? "TARJETA" : "TRANSFERENCIA");
             int unidades = 0;
             for (Linea l : lineas) {
                 compraService.agregarProducto(compra, l.producto.getCodigo(), l.cantidad, l.costo);
@@ -442,6 +557,7 @@ public class CompraPanel extends VBox {
             compraService.finalizar(compra);
             mostrarAviso(compra, unidades, lineas.size());
             lineas.clear();
+            pagoEditado = false;   // la próxima compra vuelve a empezar pagando completo
             limpiarLinea();
             actualizarTotales();
             buscador.requestFocus();
@@ -490,6 +606,10 @@ public class CompraPanel extends VBox {
             case F3 -> {
                 comboProveedor.requestFocus();
                 comboProveedor.show();
+            }
+            case F4 -> {
+                pagoInicial.requestFocus();
+                pagoInicial.selectAll();
             }
             case F12 -> confirmar();
             case ESCAPE -> {

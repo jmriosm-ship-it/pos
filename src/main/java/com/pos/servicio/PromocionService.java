@@ -57,7 +57,10 @@ public class PromocionService {
     public void aplicar(Venta v) throws SQLException {
         BigDecimal total = BigDecimal.ZERO;
         if (!v.getDetalles().isEmpty()) {
-            List<Promocion> vigentes = dao.listar().stream().filter(p -> p.vigente(LocalDate.now())).toList();
+            // Cada vez que cambia el carrito se recalcula: se usan las promociones de la copia local (renovada cada 20 s) y no un viaje a internet.
+            List<Promocion> todas = com.pos.config.Conectividad.enLinea() && com.pos.offline.CacheLocal.fresco(45_000)
+                    ? com.pos.offline.CacheLocal.promociones() : dao.listar();
+            List<Promocion> vigentes = todas.stream().filter(p -> p.vigente(LocalDate.now())).toList();
             if (!vigentes.isEmpty()) {
                 for (DetalleVenta d : v.getDetalles()) {
                     if (d.getIdCategoria() == null) {

@@ -14,6 +14,14 @@ public class ConfiguracionDAO {
 
     // Todos los ajustes de una vez.
     public Map<String, String> todos() throws SQLException {
+        try {
+            return todosDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.config();
+        }
+    }
+
+    private Map<String, String> todosDb() throws SQLException {
         Map<String, String> mapa = new LinkedHashMap<>();
 
         try (Connection con = Conexion.obtener();
@@ -27,10 +35,10 @@ public class ConfiguracionDAO {
     }
 
     // Guarda un ajuste: si la clave ya existe lo actualiza, y si no, lo crea.
-    // "ON DUPLICATE KEY UPDATE" hace ese "crear o actualizar" en una sola instrucción.
+    // "ON CONFLICT ... DO UPDATE" hace ese "crear o actualizar" en una sola instrucción.
     public void guardar(String clave, String valor) throws SQLException {
         String sql = "INSERT INTO configuracion (clave, valor) VALUES (?, ?) "
-                + "ON DUPLICATE KEY UPDATE valor = VALUES(valor)";
+                + "ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor";
 
         try (Connection con = Conexion.obtener();
              PreparedStatement ps = con.prepareStatement(sql)) {

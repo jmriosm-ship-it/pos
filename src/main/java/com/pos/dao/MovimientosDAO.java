@@ -26,11 +26,11 @@ public class MovimientosDAO {
 
     // Cada SELECT entrega las mismas columnas: fecha, grupo, tipo, detalle, valor, usuario.
     private static final String UNION =
-            "SELECT v.fecha AS fecha, 'Ventas' AS grupo, IF(v.estado = 'ANULADA', 'Venta anulada', 'Venta') AS tipo, "
+            "SELECT v.fecha AS fecha, 'Ventas' AS grupo, CASE WHEN v.estado = 'ANULADA' THEN 'Venta anulada' ELSE 'Venta' END AS tipo, "
             + " CONCAT(COALESCE(v.etiqueta, CONCAT('#', v.id)), ' · ', COALESCE(c.nombre, 'Cliente general')) AS detalle, "
             + " v.total AS valor, u.nombre AS usuario FROM ventas v LEFT JOIN clientes c ON c.id = v.id_cliente "
             + " JOIN usuarios u ON u.id = v.id_usuario"
-            + " UNION ALL SELECT co.fecha, 'Compras', 'Compra', CONCAT('Compra #', co.id, ' · ', p.nombre), -co.total, u.nombre "
+            + " UNION ALL SELECT co.fecha, 'Compras', CASE WHEN co.anulada THEN 'Compra anulada' ELSE 'Compra' END, CONCAT('Compra #', co.id, ' · ', p.nombre), CASE WHEN co.anulada THEN 0 ELSE -co.total END, u.nombre "
             + " FROM compras co JOIN proveedores p ON p.id = co.id_proveedor JOIN usuarios u ON u.id = co.id_usuario"
             + " UNION ALL SELECT a.fecha, 'Cobros', 'Abono de fiado', CONCAT(c.nombre, ' · ', a.metodo), a.monto, u.nombre "
             + " FROM abonos_fiado a JOIN fiados f ON f.id = a.id_fiado JOIN clientes c ON c.id = f.id_cliente JOIN usuarios u ON u.id = a.id_usuario"
@@ -38,22 +38,22 @@ public class MovimientosDAO {
             + " FROM credito_pagos p JOIN creditos cr ON cr.id = p.id_credito JOIN clientes c ON c.id = cr.id_cliente "
             + " JOIN ventas v ON v.id = cr.id_venta JOIN usuarios u ON u.id = p.id_usuario"
             + " UNION ALL SELECT g.fecha, 'Gastos', g.categoria, g.concepto, -g.monto, u.nombre FROM gastos g JOIN usuarios u ON u.id = g.id_usuario"
-            + " UNION ALL SELECT m.fecha, 'Caja', IF(m.tipo = 'INGRESO', 'Ingreso de caja', 'Egreso de caja'), m.motivo, "
-            + " IF(m.tipo = 'INGRESO', m.monto, -m.monto), u.nombre FROM movimientos_caja m JOIN usuarios u ON u.id = m.id_usuario"
+            + " UNION ALL SELECT m.fecha, 'Caja', CASE WHEN m.tipo = 'INGRESO' THEN 'Ingreso de caja' ELSE 'Egreso de caja' END, m.motivo, "
+            + " CASE WHEN m.tipo = 'INGRESO' THEN m.monto ELSE -m.monto END, u.nombre FROM movimientos_caja m JOIN usuarios u ON u.id = m.id_usuario"
             + " UNION ALL SELECT ca.abierta_en, 'Caja', 'Apertura de caja', CONCAT('Caja #', ca.id), ca.monto_inicial, u.nombre "
             + " FROM cajas ca JOIN usuarios u ON u.id = ca.id_usuario"
             + " UNION ALL SELECT ca.cerrada_en, 'Caja', 'Cierre de caja', CONCAT('Caja #', ca.id, ' · diferencia ', ca.diferencia), ca.monto_contado, u.nombre "
             + " FROM cajas ca JOIN usuarios u ON u.id = ca.id_usuario WHERE ca.cerrada_en IS NOT NULL"
             + " UNION ALL SELECT d.fecha, 'Devoluciones', 'Devolución', CONCAT('Venta ', COALESCE(v.etiqueta, CONCAT('#', v.id)), ' · ', d.metodo), -d.monto, u.nombre "
             + " FROM devoluciones d JOIN ventas v ON v.id = d.id_venta JOIN usuarios u ON u.id = d.id_usuario"
-            + " UNION ALL SELECT n.fecha, 'Nómina', IF(n.tipo = 'PAGO', 'Pago de sueldo', 'Consumo de cupo'), n.concepto, "
-            + " IF(n.tipo = 'PAGO', -n.valor, n.valor), u.nombre FROM nomina n JOIN usuarios u ON u.id = n.id_registro WHERE n.anulado = FALSE";
+            + " UNION ALL SELECT n.fecha, 'Nómina', CASE WHEN n.tipo = 'PAGO' THEN 'Pago de sueldo' ELSE 'Consumo de cupo' END, n.concepto, "
+            + " CASE WHEN n.tipo = 'PAGO' THEN -n.valor ELSE n.valor END, u.nombre FROM nomina n JOIN usuarios u ON u.id = n.id_registro WHERE n.anulado = FALSE";
 
     // grupo = null → todos. texto filtra por tipo, detalle o usuario. limite/salto sirven para paginar.
     public List<Fila> listar(LocalDate desde, LocalDate hasta, String grupo, String texto, int limite, int salto) throws SQLException {
         String sql = "SELECT * FROM (" + UNION + ") t WHERE t.fecha >= ? AND t.fecha < ? "
                 + (grupo == null ? "" : "AND t.grupo = ? ")
-                + "AND (t.tipo LIKE ? OR t.detalle LIKE ? OR t.usuario LIKE ?) ORDER BY t.fecha DESC LIMIT ? OFFSET ?";
+                + "AND (t.tipo ILIKE ? OR t.detalle ILIKE ? OR t.usuario ILIKE ?) ORDER BY t.fecha DESC LIMIT ? OFFSET ?";
         String patron = "%" + (texto == null ? "" : texto.trim()) + "%";
         List<Fila> lista = new ArrayList<>();
         try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {

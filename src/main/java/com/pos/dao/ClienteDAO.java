@@ -16,12 +16,28 @@ public class ClienteDAO {
 
     // Todos los clientes, ordenados por nombre.
     public List<Cliente> listar() throws SQLException {
+        try {
+            return listarDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    private List<Cliente> listarDb() throws SQLException {
         return consultar("SELECT * FROM clientes ORDER BY nombre", null);
     }
 
     // Busca por parte del nombre, del documento o del teléfono (para el buscador de la caja).
     public List<Cliente> buscar(String texto) throws SQLException {
-        String sql = "SELECT * FROM clientes WHERE nombre LIKE ? OR documento LIKE ? OR telefono LIKE ? "
+        try {
+            return buscarDb(texto);
+        } catch (com.pos.config.SinConexionException e) {
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    private List<Cliente> buscarDb(String texto) throws SQLException {
+        String sql = "SELECT * FROM clientes WHERE nombre ILIKE ? OR documento ILIKE ? OR telefono ILIKE ? "
                 + "ORDER BY nombre LIMIT 50";
         return consultar(sql, "%" + texto + "%");
     }
@@ -113,7 +129,7 @@ public class ClienteDAO {
         }
     }
 
-    // Texto vacío -> null, para que MySQL guarde "sin documento" en vez de un "" repetido.
+    // Texto vacío -> null, para que la base de datos guarde "sin documento" en vez de un "" repetido.
     private String vacioANull(String texto) {
         return (texto == null || texto.isBlank()) ? null : texto.trim();
     }

@@ -10,21 +10,21 @@ import javafx.scene.input.KeyEvent;
 public class UsuariosView extends TabPane {
 
     private final UsuariosPanel usuarios = new UsuariosPanel();
-    private final PermisosPanel permisos = new PermisosPanel();
-    private final TrabajadoresPanel trabajadores = new TrabajadoresPanel();
+    private final Perezosa<PermisosPanel> permisos = new Perezosa<>(PermisosPanel::new);
+    private final Perezosa<TrabajadoresPanel> trabajadores = new Perezosa<>(TrabajadoresPanel::new);
     private final EventHandler<KeyEvent> manejadorTeclas = this::tecla;
 
     public UsuariosView() {
         setTabClosingPolicy(TabClosingPolicy.UNAVAILABLE);
         Tab pUsuarios = new Tab("Usuarios", usuarios);
         pUsuarios.setGraphic(Atajos.tecla("Alt+1"));
-        Tab pPermisos = new Tab("Permisos", permisos);
+        Tab pPermisos = new Tab("Permisos");
         pPermisos.setGraphic(Atajos.tecla("Alt+2"));
-        Tab pTrabajadores = new Tab("Trabajadores", trabajadores);
+        Tab pTrabajadores = new Tab("Trabajadores");
         pTrabajadores.setGraphic(Atajos.tecla("Alt+3"));
         getTabs().addAll(pUsuarios, pPermisos, pTrabajadores);
-        pTrabajadores.setOnSelectionChanged(e -> { if (pTrabajadores.isSelected()) trabajadores.recargar(); });
-        pPermisos.setOnSelectionChanged(e -> { if (pPermisos.isSelected()) permisos.recargar(); });
+        trabajadores.enPestana(pTrabajadores, TrabajadoresPanel::recargar);
+        permisos.enPestana(pPermisos, PermisosPanel::recargar);
 
         sceneProperty().addListener((o, antigua, nueva) -> {
             if (antigua != null) {

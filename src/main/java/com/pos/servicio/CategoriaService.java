@@ -65,8 +65,8 @@ public class CategoriaService {
                 dao.actualizar(c);
             }
         } catch (SQLException e) {
-            // El nombre es UNIQUE en la base: si ya existe, MySQL avisa con "Duplicate entry".
-            if (e.getMessage() != null && e.getMessage().contains("Duplicate")) {
+            // El nombre es UNIQUE en la base: si ya existe, PostgreSQL avisa con el código 23505.
+            if ("23505".equals(e.getSQLState())) {
                 throw new IllegalArgumentException("Ya existe una categoría llamada \"" + c.getNombre() + "\".");
             }
             throw e;

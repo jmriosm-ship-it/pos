@@ -51,6 +51,7 @@ public class MainView extends BorderPane {
     private final List<Modulo> ordenMenu = new ArrayList<>();
     private final EventHandler<KeyEvent> manejadorAtajos = this::atajo;
     private boolean abrirPestanaCaja = false;   // true cuando se entra a Ventas pidiendo la pestaña de caja
+    private long ultimaNavegacion = 0;           // cuenta las pantallas pedidas, para saltar las que ya no hacen falta
     private javafx.scene.Node menuLateral;      // el menú de la izquierda
     private javafx.scene.Node barraSuperior;    // la barra de arriba (título, caja, fecha)
 
@@ -71,7 +72,9 @@ public class MainView extends BorderPane {
                 nueva.addEventFilter(KeyEvent.KEY_PRESSED, manejadorAtajos);
             }
         });
-        ir(Modulo.DASHBOARD);   // todos los roles ven el Inicio
+        // Sin internet solo se puede vender: se abre directo Ventas. Con internet, todos los roles ven el Inicio.
+        boolean sinConexion = !com.pos.config.Conectividad.enLinea();
+        ir(sinConexion && Permisos.puedeVer(usuario, Modulo.VENTAS) ? Modulo.VENTAS : Modulo.DASHBOARD);
     }
 
     // Ctrl + 1...9 = ir al módulo que tenga ese número en el menú.
@@ -132,6 +135,10 @@ public class MainView extends BorderPane {
         if (!Permisos.puedeVer(usuario, pedido) || botones.get(modulo) == null) {
             return;
         }
+        if (!com.pos.config.Conectividad.enLinea() && modulo != Modulo.VENTAS) {
+            Mensajes.info("Sin conexión", "Sin internet solo se puede vender.\nEsta pantalla vuelve a estar disponible cuando regrese la conexión.");
+            return;
+        }
         botones.values().forEach(b -> b.getStyleClass().remove("activo"));
         botones.get(modulo).getStyleClass().add("activo");
         titulo.setText(modulo.getTitulo());
@@ -139,8 +146,22 @@ public class MainView extends BorderPane {
         boolean pantallaCompleta = modulo == Modulo.VENTAS;
         setLeft(pantallaCompleta ? null : menuLateral);
         setTop(pantallaCompleta ? null : barraSuperior);
-        contenido.getChildren().setAll(crearVista(modulo));
-        actualizarCaja();
+        // El cambio se ve al instante (menú marcado y "Cargando…"); la pantalla se arma enseguida, ya con la pantalla pintada.
+        long mia = ++ultimaNavegacion;
+        boolean pidioCaja = abrirPestanaCaja;
+        Label cargando = new Label("Cargando…");
+        cargando.getStyleClass().add("texto-suave");
+        contenido.getChildren().setAll(cargando);
+        javafx.animation.PauseTransition pausa = new javafx.animation.PauseTransition(javafx.util.Duration.millis(30));
+        pausa.setOnFinished(ev -> {
+            if (mia != ultimaNavegacion) {
+                return;   // ya se pidió otra pantalla: esta no hace falta
+            }
+            abrirPestanaCaja = pidioCaja;
+            contenido.getChildren().setAll(crearVista(modulo));
+            actualizarCaja();
+        });
+        pausa.play();
     }
 
     // Muestra u oculta el menú lateral estando en Ventas (botón Menú o Ctrl + B).
@@ -271,7 +292,7 @@ public class MainView extends BorderPane {
 
         Region espacio = new Region();
         HBox.setHgrow(espacio, Priority.ALWAYS);
-        HBox barra = new HBox(14, titulo, espacio, chipCaja, fecha);
+        HBox barra = new HBox(14, titulo, espacio, BannerConexion.crear(), chipCaja, fecha);
         barra.setAlignment(Pos.CENTER_LEFT);
         barra.getStyleClass().add("topbar");
         return barra;

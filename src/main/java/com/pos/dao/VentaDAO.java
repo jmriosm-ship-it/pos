@@ -20,23 +20,33 @@ public class VentaDAO {
     // Guarda la venta completa dentro de UNA transacción.
     // Transacción = grupo de operaciones que se aplican todas juntas o ninguna.
     public void guardar(Venta v) throws SQLException {
-        String sqlVenta = "INSERT INTO ventas (id_caja, id_usuario, id_cliente, subtotal, descuento, total, metodo_pago, "
-                + "descuento_promo, descuento_puntos, puntos_usados, puntos_ganados, financiera_nombre) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        String sqlDetalle = "INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unit, costo_unit, subtotal, precio_original) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
-        // "stock >= ?" evita que el stock quede negativo aunque dos cajeros vendan a la vez.
-        String sqlStock = "UPDATE productos SET stock = stock - ? WHERE id = ? AND stock >= ?";
-        String sqlMovimiento = "INSERT INTO movimientos_inventario (id_producto, id_usuario, tipo, cantidad, motivo) "
-                + "VALUES (?, ?, 'SALIDA', ?, ?)";
+        guardar(v, false);
+    }
+
+    // Sube una venta que se hizo sin conexión: conserva su fecha y hora originales, queda marcada con su identificador
+    // único (si ya se había subido, la base la rechaza y no se duplica) y, aunque el stock de hoy no alcance, la
+    // venta ya ocurrió: el stock puede quedar negativo para que se vea que hay que revisarlo.
+    public void guardarSincronizada(Venta v) throws SQLException {
+        guardar(v, true);
+    }
+
+    private void guardar(Venta v, boolean sincronizada) throws SQLException {
+        // La venta y su número de recibo van en UNA sola instrucción (el id sale de la secuencia y se usa ya para armar
+        // el número). La base está en internet y cada ida y vuelta cuesta ~140 ms: por eso se piden pocas.
+        String sqlVenta = "WITH n AS (SELECT nextval(pg_get_serial_sequence('ventas', 'id')) AS id) "
+                + "INSERT INTO ventas (id, id_caja, id_usuario, id_cliente, subtotal, descuento, total, metodo_pago, "
+                + "descuento_promo, descuento_puntos, puntos_usados, puntos_ganados, financiera_nombre, etiqueta"
+                + (sincronizada ? ", fecha, origen_offline" : "") + ") "
+                + "SELECT n.id, ?, ?, ?::integer, ?, ?, ?, ?, ?, ?, ?, ?, ?::varchar, ? || '-' || lpad(n.id::text, 5, '0')"
+                + (sincronizada ? ", ?, ?" : "") + " FROM n RETURNING id";
 
         Connection con = Conexion.obtener();
         try {
             // Apaga el guardado automático: nada se graba hasta que hagamos commit().
             con.setAutoCommit(false);
 
-            // 1) La venta (encabezado)
-            try (PreparedStatement ps = con.prepareStatement(sqlVenta, Statement.RETURN_GENERATED_KEYS)) {
+            // 1) La venta (encabezado), ya con su número de recibo por caja: prefijo + id con ceros (C1-00005).
+            try (PreparedStatement ps = con.prepareStatement(sqlVenta)) {
                 ps.setInt(1, v.getIdCaja());
                 ps.setInt(2, v.getIdUsuario());
                 ps.setObject(3, v.getIdCliente());   // setObject permite enviar null
@@ -49,83 +59,58 @@ public class VentaDAO {
                 ps.setInt(10, v.getPuntosUsados());
                 ps.setInt(11, v.getPuntosGanados());
                 ps.setString(12, v.getFinancieraNombre());
-                ps.executeUpdate();
-
-                try (ResultSet keys = ps.getGeneratedKeys()) {
-                    keys.next();
-                    v.setId(keys.getInt(1));
+                ps.setString(13, v.getPrefijoCaja());
+                if (sincronizada) {
+                    ps.setTimestamp(14, Timestamp.valueOf(v.getFecha()));
+                    ps.setString(15, v.getOrigenOffline());
+                }
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    v.setId(rs.getInt(1));
                 }
             }
-            // Número de recibo por caja: prefijo + id con ceros (C1-00005).
             v.setEtiqueta(v.getPrefijoCaja() + "-" + String.format("%05d", v.getId()));
-            try (PreparedStatement ps = con.prepareStatement("UPDATE ventas SET etiqueta = ? WHERE id = ?")) {
-                ps.setString(1, v.getEtiqueta());
-                ps.setInt(2, v.getId());
-                ps.executeUpdate();
-            }
 
-            // 2) Cada línea del carrito
+            // 2) Todo lo demás (líneas, stock, movimientos, pagos, deuda) se manda junto, en un solo envío.
+            //    Son números y textos que arma el propio programa; los textos se escapan.
+            List<String> sentencias = new ArrayList<>();
+            List<Integer> posicionStock = new ArrayList<>();   // dónde quedó cada "bajar stock", para revisar que alcanzó
             for (DetalleVenta d : v.getDetalles()) {
-
-                try (PreparedStatement ps = con.prepareStatement(sqlDetalle)) {
-                    ps.setInt(1, v.getId());
-                    ps.setInt(2, d.getIdProducto());
-                    ps.setInt(3, d.getCantidad());
-                    ps.setBigDecimal(4, d.getPrecioUnit());
-                    ps.setBigDecimal(5, d.getCostoUnit());
-                    ps.setBigDecimal(6, d.getSubtotal());
-                    ps.setBigDecimal(7, d.getPrecioOriginal());
-                    ps.executeUpdate();
-                }
-
-                // 3) Bajar el stock
-                try (PreparedStatement ps = con.prepareStatement(sqlStock)) {
-                    ps.setInt(1, d.getCantidad());
-                    ps.setInt(2, d.getIdProducto());
-                    ps.setInt(3, d.getCantidad());
-                    int filas = ps.executeUpdate();   // cuántas filas se modificaron
-                    if (filas == 0) {
-                        // Nadie cumplió "stock >= cantidad": no alcanzó el stock.
-                        throw new SQLException("Stock insuficiente para: " + d.getNombreProducto());
-                    }
-                }
-
-                // 4) Anotar el movimiento de inventario
-                try (PreparedStatement ps = con.prepareStatement(sqlMovimiento)) {
-                    ps.setInt(1, d.getIdProducto());
-                    ps.setInt(2, v.getIdUsuario());
-                    ps.setInt(3, d.getCantidad());
-                    ps.setString(4, "Venta #" + v.getId());
-                    ps.executeUpdate();
-                }
+                sentencias.add("INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unit, costo_unit, subtotal, precio_original) VALUES ("
+                        + v.getId() + ", " + d.getIdProducto() + ", " + d.getCantidad() + ", " + d.getPrecioUnit().toPlainString() + ", "
+                        + d.getCostoUnit().toPlainString() + ", " + d.getSubtotal().toPlainString() + ", " + d.getPrecioOriginal().toPlainString() + ")");
+                // "stock >= cantidad" evita que el stock quede negativo aunque dos cajeros vendan a la vez.
+                posicionStock.add(sentencias.size());
+                sentencias.add("UPDATE productos SET stock = stock - " + d.getCantidad() + " WHERE id = " + d.getIdProducto()
+                        + (sincronizada ? "" : " AND stock >= " + d.getCantidad()));
+                sentencias.add("INSERT INTO movimientos_inventario (id_producto, id_usuario, tipo, cantidad, motivo) VALUES ("
+                        + d.getIdProducto() + ", " + v.getIdUsuario() + ", 'SALIDA', " + d.getCantidad() + ", " + texto("Venta #" + v.getId()) + ")");
             }
-
-            // 5) Los pagos de la venta (puede haber varios: efectivo + tarjeta, etc.)
-            try (PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO pagos_venta (id_venta, metodo, monto) VALUES (?, ?, ?)")) {
-                for (Pago pago : v.getPagos()) {
-                    ps.setInt(1, v.getId());
-                    ps.setString(2, pago.metodo());
-                    ps.setBigDecimal(3, pago.monto());
-                    ps.executeUpdate();
-                }
+            // Los pagos (puede haber varios: efectivo + tarjeta, etc.)
+            for (Pago pago : v.getPagos()) {
+                sentencias.add("INSERT INTO pagos_venta (id_venta, metodo, monto) VALUES (" + v.getId() + ", " + texto(pago.metodo())
+                        + ", " + pago.monto().toPlainString() + ")");
             }
-
-            // 6) Si una parte de la venta quedó FIADA, se anota la deuda del cliente.
+            // Si una parte de la venta quedó FIADA, se anota la deuda del cliente.
             for (Pago pago : v.getPagos()) {
                 if ("FIADO".equals(pago.metodo())) {
-                    try (PreparedStatement ps = con.prepareStatement(
-                            "INSERT INTO fiados (id_venta, id_cliente, monto, saldo) VALUES (?, ?, ?, ?)")) {
-                        ps.setInt(1, v.getId());
-                        ps.setInt(2, v.getIdCliente());
-                        ps.setBigDecimal(3, pago.monto());
-                        ps.setBigDecimal(4, pago.monto());
-                        ps.executeUpdate();
+                    sentencias.add("INSERT INTO fiados (id_venta, id_cliente, monto, saldo) VALUES (" + v.getId() + ", "
+                            + v.getIdCliente() + ", " + pago.monto().toPlainString() + ", " + pago.monto().toPlainString() + ")");
+                }
+            }
+            try (Statement st = con.createStatement()) {
+                for (String s : sentencias) {
+                    st.addBatch(s);
+                }
+                int[] filas = st.executeBatch();
+                for (int i = 0; i < posicionStock.size(); i++) {
+                    if (filas[posicionStock.get(i)] == 0) {   // nadie cumplió "stock >= cantidad": no alcanzó el stock
+                        throw new SQLException("Stock insuficiente para: " + v.getDetalles().get(i).getNombreProducto());
                     }
                 }
             }
 
-            // 7) Si parte de la venta se financia en cuotas, se crea el crédito con su plan de pagos.
+            // 3) Si parte de la venta se financia en cuotas, se crea el crédito con su plan de pagos.
             if (v.getPlanCredito() != null) {
                 String descripcion = v.getDetalles().stream().map(d -> d.getCantidad() + " x " + d.getNombreProducto())
                         .collect(java.util.stream.Collectors.joining(", "));
@@ -146,6 +131,11 @@ public class VentaDAO {
             con.setAutoCommit(true);
             con.close();
         }
+    }
+
+    // Un texto como literal de SQL (entre comillas simples, con las comillas internas duplicadas).
+    private static String texto(String s) {
+        return "'" + s.replace("'", "''") + "'";
     }
 
     // Lista las ventas de un rango de fechas (sin sus líneas). Incluye las anuladas;
@@ -171,9 +161,9 @@ public class VentaDAO {
 
     // Los recibos más recientes que coinciden con el texto: número, cliente, vendedor o producto.
     public List<Venta> buscarRecibos(String texto, int limite) throws SQLException {
-        String sql = consultaBase() + " WHERE (v.etiqueta LIKE ? OR CAST(v.id AS CHAR) LIKE ? OR c.nombre LIKE ? OR u.nombre LIKE ? "
+        String sql = consultaBase() + " WHERE (v.etiqueta ILIKE ? OR CAST(v.id AS TEXT) ILIKE ? OR c.nombre ILIKE ? OR u.nombre ILIKE ? "
                 + "OR EXISTS (SELECT 1 FROM detalle_venta d JOIN productos p ON p.id = d.id_producto "
-                + "WHERE d.id_venta = v.id AND p.nombre LIKE ?)) ORDER BY v.id DESC LIMIT ?";
+                + "WHERE d.id_venta = v.id AND p.nombre ILIKE ?)) ORDER BY v.id DESC LIMIT ?";
         String patron = "%" + (texto == null ? "" : texto.trim()) + "%";
         List<Venta> lista = new ArrayList<>();
         try (Connection con = Conexion.obtener(); PreparedStatement ps = con.prepareStatement(sql)) {

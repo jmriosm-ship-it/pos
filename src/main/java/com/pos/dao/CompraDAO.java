@@ -20,7 +20,7 @@ public class CompraDAO {
     //   1) encabezado de la compra  2) cada línea  3) sube stock y actualiza costo
     //   4) anota el movimiento ENTRADA en el historial de inventario.
     public void guardar(Compra c) throws SQLException {
-        String sqlCompra = "INSERT INTO compras (id_proveedor, id_usuario, total) VALUES (?, ?, ?)";
+        String sqlCompra = "INSERT INTO compras (id_proveedor, id_usuario, total, pagado) VALUES (?, ?, ?, ?)";
         String sqlDetalle = "INSERT INTO detalle_compra (id_compra, id_producto, cantidad, costo_unit) VALUES (?, ?, ?, ?)";
         // Sube el stock y deja como precio_compra el costo de ESTA compra (el más reciente).
         String sqlStock = "UPDATE productos SET stock = stock + ?, precio_compra = ? WHERE id = ?";
@@ -35,6 +35,7 @@ public class CompraDAO {
                 ps.setInt(1, c.getIdProveedor());
                 ps.setInt(2, c.getIdUsuario());
                 ps.setBigDecimal(3, c.getTotal());
+                ps.setBigDecimal(4, c.getPagado());
                 ps.executeUpdate();
                 try (ResultSet keys = ps.getGeneratedKeys()) {
                     keys.next();
@@ -65,6 +66,19 @@ public class CompraDAO {
                 }
             }
 
+            // El pago inicial al proveedor (si se pagó algo): queda registrado como un abono; el efectivo sale de la caja.
+            if (c.getPagado() != null && c.getPagado().signum() > 0) {
+                try (PreparedStatement ps = con.prepareStatement(
+                        "INSERT INTO abonos_compra (id_compra, id_usuario, id_caja, metodo, monto) VALUES (?, ?, ?, ?, ?)")) {
+                    ps.setInt(1, c.getId());
+                    ps.setInt(2, c.getIdUsuario());
+                    ps.setObject(3, "EFECTIVO".equals(c.getMetodoPago()) ? c.getIdCaja() : null);
+                    ps.setString(4, c.getMetodoPago());
+                    ps.setBigDecimal(5, c.getPagado());
+                    ps.executeUpdate();
+                }
+            }
+
             con.commit();
         } catch (SQLException e) {
             con.rollback();   // si algo falló, se deshace todo
@@ -79,7 +93,7 @@ public class CompraDAO {
     public List<Compra> listarPorProveedor(int idProveedor) throws SQLException {
         String sql = "SELECT c.*, COALESCE(SUM(d.cantidad), 0) AS unidades FROM compras c "
                 + "LEFT JOIN detalle_compra d ON d.id_compra = c.id "
-                + "WHERE c.id_proveedor = ? GROUP BY c.id ORDER BY c.fecha DESC, c.id DESC";
+                + "WHERE c.id_proveedor = ? AND c.anulada = FALSE GROUP BY c.id ORDER BY c.fecha DESC, c.id DESC";
         List<Compra> lista = new ArrayList<>();
 
         try (Connection con = Conexion.obtener();
@@ -94,6 +108,7 @@ public class CompraDAO {
                     c.setIdUsuario(rs.getInt("id_usuario"));
                     c.setFecha(rs.getTimestamp("fecha").toLocalDateTime());
                     c.setTotal(rs.getBigDecimal("total"));
+                    c.setPagado(rs.getBigDecimal("pagado"));
                     c.setTotalUnidades(rs.getInt("unidades"));
                     lista.add(c);
                 }
@@ -121,6 +136,8 @@ public class CompraDAO {
                     c.setId(rs.getInt("id"));
                     c.setIdProveedor(rs.getInt("id_proveedor"));
                     c.setNombreProveedor(rs.getString("proveedor"));
+                    c.setAnulada(rs.getBoolean("anulada"));
+                    c.setPagado(rs.getBigDecimal("pagado"));
                     c.setIdUsuario(rs.getInt("id_usuario"));
                     c.setFecha(rs.getTimestamp("fecha").toLocalDateTime());
                     c.setTotal(rs.getBigDecimal("total"));

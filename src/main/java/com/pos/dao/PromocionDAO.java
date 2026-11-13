@@ -16,6 +16,14 @@ public class PromocionDAO {
 
     // Todas las promociones, con el nombre de la categoría o producto al que aplican.
     public List<Promocion> listar() throws SQLException {
+        try {
+            return listarDb();
+        } catch (com.pos.config.SinConexionException e) {
+            return com.pos.offline.CacheLocal.promociones();
+        }
+    }
+
+    private List<Promocion> listarDb() throws SQLException {
         String sql = "SELECT pr.*, COALESCE(c.nombre, p.nombre) AS objetivo FROM promociones pr "
                 + "LEFT JOIN categorias c ON pr.alcance = 'CATEGORIA' AND c.id = pr.id_objetivo "
                 + "LEFT JOIN productos p ON pr.alcance = 'PRODUCTO' AND p.id = pr.id_objetivo "
